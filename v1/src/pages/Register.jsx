@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import '../styles/register.css';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 
+
+
+// هنا استبدلت ال alert بال toast 
 const ROLES = [
   'Admin',
   'Proposal Manager',
@@ -37,19 +42,38 @@ export default function Register() {
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitted(true);
-    if (!passwordMatch) return;
-    // TODO: wire up to your auth service
-    alert(`Account created for ${form.email}`);
+
+    if (form.password !== form.confirmPassword) {
+      return;
+    }
+
+    try {
+      const response = await axios.post("http://127.0.0.1:8000/register", {
+        full_name: form.fullName,
+        email: form.email,
+        role: form.role,
+        password: form.password
+      });
+
+      toast.success(`Account created successfully! User ID is: ${response.data.id}`);
+      console.log("Added:", response.data);
+
+    } catch (error) {
+      if (error.response && error.response.status === 400) {
+        toast.error(error.response.data.detail);
+      } else {
+        toast.error("Error: Server not responding");
+      }
+    }
   };
 
   return (
     <div className="register-page">
       <div className="register-container">
 
-        {/* ── LEFT PANEL ── */}
         <aside className="register-left">
           <div className="reg-logo">
             RFPilot<span className="reg-logo-dot">.</span>
@@ -68,7 +92,6 @@ export default function Register() {
           </ul>
         </aside>
 
-        {/* ── RIGHT PANEL ── */}
         <main className="register-right">
           <h1 className="reg-title">
             Create account<span className="reg-title-dot">.</span>
@@ -77,7 +100,6 @@ export default function Register() {
 
           <form className="reg-form" onSubmit={handleSubmit} noValidate>
 
-            {/* Full Name */}
             <div className="reg-field">
               <label className="reg-label">Full Name</label>
               <input
@@ -90,7 +112,6 @@ export default function Register() {
               />
             </div>
 
-            {/* Corporate Email */}
             <div className="reg-field">
               <label className="reg-label">Corporate Email</label>
               <input
@@ -103,7 +124,6 @@ export default function Register() {
               />
             </div>
 
-            {/* Role */}
             <div className="reg-field">
               <label className="reg-label">Select Role</label>
               <div className="reg-select-wrapper">
@@ -122,7 +142,6 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Password */}
             <div className="reg-field">
               <label className="reg-label">Password</label>
               <div className="reg-pw-wrapper">
@@ -145,7 +164,6 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Confirm Password */}
             <div className="reg-field">
               <label className="reg-label">Confirm Password</label>
               <div className="reg-pw-wrapper">
@@ -176,12 +194,10 @@ export default function Register() {
               )}
             </div>
 
-            {/* Submit */}
             <button type="submit" className="reg-btn">
               Create account
             </button>
 
-            {/* Terms */}
             <p className="reg-terms">
               By signing up you agree to our{' '}
               <a href="#" className="reg-link">Terms of Service</a>{' '}
@@ -189,10 +205,8 @@ export default function Register() {
               <a href="#" className="reg-link">Privacy Policy</a>.
             </p>
 
-            {/* Sign in link */}
             <p className="reg-footer">
               Already have an account?{' '}
-              {/* Replace href with <Link to="/login"> if using React Router */}
               <a href="/login" className="reg-link">Sign in →</a>
             </p>
 
@@ -204,7 +218,6 @@ export default function Register() {
   );
 }
 
-/* ── SVG Icons ── */
 function EyeIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none"

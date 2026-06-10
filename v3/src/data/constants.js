@@ -1,3 +1,5 @@
+// [ADDED] Dashboard data constants — all values zeroed, ready for backend
+
 // ── Filter Definitions ────────────────────────────────────────────
 export const DEFAULT_LABELS = {
   status: 'All Statuses',
@@ -48,72 +50,36 @@ export const FILTER_OPTIONS = {
 };
 
 // ── KPI Data ──────────────────────────────────────────────────────
+// TODO: Replace with API call when backend is ready
+// GET /api/kpi → [{ label, value, trend, up, colorClass }]
 export const KPI_DATA = [
-  { label: 'Total RFPs',    value: '7,265', trend: '+11.01%', up: true,  colorClass: 'k1' },
-  { label: 'Active RFPs',   value: '3,671', trend: '-0.03%',  up: false, colorClass: 'k2' },
-  { label: 'Under Review',  value: '1,284', trend: '+8.2%',   up: true,  colorClass: 'k3' },
-  { label: 'Submitted',     value: '156',   trend: '+15.03%', up: true,  colorClass: 'k4' },
-  { label: 'Archived',      value: '812',   trend: '+4.1%',   up: true,  colorClass: 'k5' },
-  { label: 'Win Rate',      value: '68.4%', trend: '+6.08%',  up: true,  colorClass: 'k6' },
+  { label: 'Total RFPs',   value: '0',  trend: '0%', up: true,  colorClass: 'k1' },
+  { label: 'Active RFPs',  value: '0',  trend: '0%', up: false, colorClass: 'k2' },
+  { label: 'Under Review', value: '0',  trend: '0%', up: true,  colorClass: 'k3' },
+  { label: 'Submitted',    value: '0',  trend: '0%', up: true,  colorClass: 'k4' },
+  { label: 'Archived',     value: '0',  trend: '0%', up: true,  colorClass: 'k5' },
+  { label: 'Win Rate',     value: '0%', trend: '0%', up: true,  colorClass: 'k6' },
 ];
 
 // ── Top Clients ───────────────────────────────────────────────────
-export const TOP_CLIENTS = [
-  { name: 'Google',    pct: 88 },
-  { name: 'YouTube',   pct: 72 },
-  { name: 'Instagram', pct: 56 },
-  { name: 'Aramco',    pct: 42 },
-  { name: 'MOH',       pct: 28 },
-];
+// TODO: Replace with API call when backend is ready
+// GET /api/clients/top → [{ name, pct }]
+export const TOP_CLIENTS = [];
 
-// ── Upcoming Deadlines (right panel + deadlines tab) ──────────────
-export const DEADLINES = [
-  { name: 'RFP-Z — Ministry',   date: 'May 27, 2026', tabDate: 'May 27', days: '2d',  pill: 'pr' },
-  { name: 'RFP-A — Google',     date: 'Jun 3, 2026',  tabDate: 'Jun 3',  days: '9d',  pill: 'pa' },
-  { name: 'RFP-B — YouTube',    date: 'Jun 14, 2026', tabDate: 'Jun 14', days: '20d', pill: 'pb' },
-  { name: 'RFP-C — Enterprise', date: 'Jul 1, 2026',  tabDate: 'Jul 1',  days: '37d', pill: 'pg' },
-];
+// ── Upcoming Deadlines ────────────────────────────────────────────
+// TODO: Replace with API call when backend is ready
+// GET /api/deadlines → [{ name, date, tabDate, days, pill }]
+export const DEADLINES = [];
 
 // ── Notifications ─────────────────────────────────────────────────
-export const NOTIFICATIONS = [
-  { text: 'RFP-Z deadline: 2 days left',  time: 'Just now',       dotColor: 'var(--red)' },
-  { text: 'Urgent: Review RFP-A now',     time: '59 minutes ago', dotColor: 'var(--amber)' },
-  { text: 'AI draft updated for RFP-B',   time: '12 hours ago',   dotColor: 'var(--accent)' },
-];
+// TODO: Replace with API call when backend is ready
+// GET /api/notifications → [{ text, time, dotColor }]
+export const NOTIFICATIONS = [];
 
 // ── Bid/No-Bid Decisions ──────────────────────────────────────────
-export const BID_DECISIONS = [
-  {
-    title: 'Ministry of Transport — IT Infra',
-    subtitle: 'Government · SAR 18M+',
-    decision: 'BID',
-    rationale: [
-      { icon: 'ti-shield-exclamation', iconBg: '#E24B4A20', iconColor: '#f87171', label: 'Key Risks',       text: 'Data residency + ISO 27001 compliance required' },
-      { icon: 'ti-clock',              iconBg: '#EF9F2720', iconColor: '#fbbf24', label: 'Expected Effort', text: 'High — 6 months, 8 FTEs needed' },
-      { icon: 'ti-users',              iconBg: '#4f46e520', iconColor: '#818cf8', label: 'Resources',       text: 'Team available, SAP expertise in-house' },
-    ],
-  },
-  {
-    title: 'Saudi Aramco — Cloud Migration',
-    subtitle: 'Enterprise · SAR 32M',
-    decision: 'BID',
-    rationale: [
-      { icon: 'ti-shield-exclamation', iconBg: '#E24B4A20', iconColor: '#f87171', label: 'Key Risks',       text: 'Complex multi-cloud architecture required' },
-      { icon: 'ti-clock',              iconBg: '#EF9F2720', iconColor: '#fbbf24', label: 'Expected Effort', text: 'Very High — 12 months, 15 FTEs' },
-      { icon: 'ti-users',              iconBg: '#4f46e520', iconColor: '#818cf8', label: 'Resources',       text: 'Cloud team available + Azure partnership' },
-    ],
-  },
-  {
-    title: 'MOH — Digital Health Platform',
-    subtitle: 'Government · SAR 9M',
-    decision: 'NO BID',
-    rationale: [
-      { icon: 'ti-shield-exclamation', iconBg: '#E24B4A20', iconColor: '#f87171', label: 'Key Risks',       text: 'HIPAA + PDPL compliance gap identified' },
-      { icon: 'ti-clock',              iconBg: '#EF9F2720', iconColor: '#fbbf24', label: 'Expected Effort', text: 'High effort, low margin projected' },
-      { icon: 'ti-users',              iconBg: '#4f46e520', iconColor: '#818cf8', label: 'Resources',       text: 'Health sector expertise not available' },
-    ],
-  },
-];
+// TODO: Replace with API call when backend is ready
+// GET /api/rfps/decisions → [{ title, subtitle, decision, rationale }]
+export const BID_DECISIONS = [];
 
 // ── Chart.js shared grid/tick color helpers ───────────────────────
 export const CHART_GRID  = 'rgba(255,255,255,0.05)';

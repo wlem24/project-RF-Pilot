@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# استيراد الـ Routers الخاصة بك
 from register import router as register_router
 from login import router as login_router
-
+from bot import router as bot_router  # استيراد ملف البوت الجديد
 
 app = FastAPI(title="Auth API")
 
@@ -15,6 +16,7 @@ origins = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -29,17 +31,12 @@ app.add_middleware(
 # origins carefully to avoid exposing the API to unwanted clients.
 
 
-# Include authentication routers for clean route organization
+# Include routers for clean route organization
 app.include_router(register_router)
 app.include_router(login_router)
+app.include_router(bot_router, prefix="/bot", tags=["AI Bot"]) # إضافة مسار البوت مع تحديد prefix
 
 
 @app.get("/")
 def root():
-    return {"message": "Auth API is running"}
-
-
-
-
-
-
+ return {"message": "Auth API is running"}

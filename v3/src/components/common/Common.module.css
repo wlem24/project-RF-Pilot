@@ -1,0 +1,28 @@
+/* Common.module.css */
+
+.spinnerWrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 4rem 1.5rem; }
+.spinnerIcon { font-size: 1.75rem; color: #6366f1; animation: spin 0.8s linear infinite; }
+.spinnerText { font-size: 0.875rem; color: #9ca3af; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.errorWrap { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 3rem 1.5rem; text-align: center; }
+.errorIcon { width: 3rem; height: 3rem; border-radius: 0.75rem; background: #fef2f2; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #ef4444; }
+.errorTitle { font-size: 0.875rem; font-weight: 600; color: #374151; }
+.errorText  { font-size: 0.8125rem; color: #9ca3af; margin-top: 0.25rem; }
+
+.compact { padding: 1.5rem 1rem; }
+
+.progressRow { margin-bottom: 0.875rem; }
+.progressRowHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.375rem; }
+.progressLabel { font-size: 0.875rem; color: #374151; }
+.progressPct   { font-size: 0.875rem; font-weight: 600; }
+
+.tableWrap { overflow-x: auto; border-radius: 0.5rem; border: 1px solid #e5e7eb; }
+.table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.tableHead { background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+.th { padding: 0.75rem 1rem; text-align: left; font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; }
+.tr { border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
+.tr:hover { background: #f9fafb; }
+.tr:last-child { border-bottom: none; }
+.td { padding: 0.75rem 1rem; color: #374151; vertical-align: middle; }
+.emptyCell { padding: 0; }

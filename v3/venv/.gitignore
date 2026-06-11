@@ -1,13 +1,17 @@
-# Created by venv; see https://docs.python.org/3/library/venv.html
-
+# البيئة الافتراضية
+.venv/
+venv/
+env/
 .env
-# Python cache
-_pycache_/
+
+# كاش بايثون (تم تصحيح الشرطات السفلية)
+**/__pycache__/
 *.pyc
 
-# Node modules (React)
-node_modules/
-.vite/
+# ملفات النود والـ Vite لـ React
+**/node_modules/
+**/.vite/
 
-# Database
+# قواعد البيانات المحلية
 *.db
+v3/starter/auth.db

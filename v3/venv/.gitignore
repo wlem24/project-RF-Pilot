@@ -1,14 +1,11 @@
 
 **/.env
 
-# كاش بايثون (تم تصحيح الشرطات السفلية)
 **/__pycache__/
 *.pyc
 
-# ملفات النود والـ Vite لـ React
 **/node_modules/
 **/.vite/
 
-# قواعد البيانات المحلية
 *.db
 v3/starter/auth.db

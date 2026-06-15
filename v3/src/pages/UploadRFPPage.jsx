@@ -4,6 +4,7 @@ import { RiUpload2Line, RiFileLine, RiCheckLine, RiCloseLine, RiBrainLine } from
 import TopNavBar      from '../components/layout/TopNavBar.jsx';
 import DraftWorkspace from '../components/layout/DraftWorkspace.jsx';
 import RightSidebar   from '../components/sidebar/RightSidebar.jsx';
+import { rfpApi } from '../services/api.js';
 import styles from '../styles/UploadRFPPage.module.css';
 
 export default function UploadRFPPage() {
@@ -15,26 +16,39 @@ export default function UploadRFPPage() {
   const [dragging,   setDragging]   = useState(false);
   const [uploading,  setUploading]  = useState(false);
   const [error,      setError]      = useState(null);
+  const [summary,    setSummary]    = useState('');
   const [draftOpen,  setDraftOpen]  = useState(false);
 
-  // 🔌 API hook: aiSummary from GET /rfps/{id}/ai-summary after upload
-  const aiSummary     = '';
   const notifications = [];
   const deadlines     = [];
 
   const handleFileChange = (f) => { if (f) setFile(f); };
 
   const handleProceed = async () => {
-    if (!file) { setError('Please select an RFP file.'); return; }
+    if (!file) {
+      setError('Please select an RFP file.');
+      return;
+    }
+
     setError(null);
     setUploading(true);
-    // 🔌 API hook: POST /rfps/upload
-    // const form = new FormData();
-    // form.append('file', file);
-    // form.append('notes', notes);
-    // const res = await rfpApi.upload(form);
-    // navigate(`/detail?id=${res.data.rfpId}`);
-    setTimeout(() => { setUploading(false); navigate('/detail'); }, 800);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('notes', notes);
+
+      const response = await rfpApi.upload(form);
+      const { rfp_id, summary: aiSummary } = response.data;
+
+      setSummary(aiSummary);
+      navigate(`/detail?id=${rfp_id}`);
+    } catch (uploadError) {
+      console.error(uploadError);
+      setError('Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -113,19 +127,19 @@ export default function UploadRFPPage() {
                 </div>
               </div>
               <div className="accent-bar" />
-              {aiSummary ? (
+              {summary ? (
                 <textarea
                   className="input textarea"
                   rows={5}
                   readOnly
-                  value={aiSummary}
+                  value={summary}
                   style={{ background: '#fafafa', color: '#6b7280' }}
                 />
               ) : (
                 <div className={styles.aiPlaceholder}>
                   <RiBrainLine className={styles.aiPlaceholderIcon} />
                   <p>AI summary will appear here after upload</p>
-                  <p className={styles.aiPlaceholderSub}>Upload a document to generate an AI-powered summary</p>
+                  <p className={styles.aiPlaceholderSub}>Upload a PDF document to generate an AI-powered summary</p>
                 </div>
               )}
             </div>

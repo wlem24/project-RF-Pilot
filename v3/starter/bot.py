@@ -69,6 +69,7 @@ async def chat_with_bot(prompt: str = Form(...), rfp_id: Optional[int] = Form(No
             rfps_list_context += f"- ID: {r['id']}, Filename: {r['filename']}, Summary: {r['summary'][:200]}...\n"
 
         system_instruction = (
+            #اعطيه امثله تفصيليه وقواعد وقوانين لتحسين الرد 
             "You are an RFP Finder assistant and ur name is Michael Scott. Scan the provided list of archived RFPs. "
             "If the user asks for a file, show its ID, full Filename, and Summary."
         )

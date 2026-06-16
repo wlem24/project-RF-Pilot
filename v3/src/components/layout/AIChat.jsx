@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 export default function AIChat({ isOpen, onToggle }) {
+    const [searchParams] = useSearchParams();
+    const rfpId = searchParams.get('id');
     const [messages, setMessages] = useState([
-        { role: 'ai', text: 'Hello! How can I assist you today?' },
+        { role: 'ai', text: rfpId ? 'Hello! Ask a question about this RFP.' : 'No RFP selected. Please open an RFP detail page first.' },
     ]);
     const [inputVal, setInputVal] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -24,20 +27,22 @@ export default function AIChat({ isOpen, onToggle }) {
         setInputVal('');
         setIsLoading(true);
 
-        // تجهيز البيانات (FormData  إرسال ملفات مستقبلاً)
+        // Allow global archive queries even when no rfpId is present.
         const formData = new FormData();
         formData.append('prompt', val);
-
+        if (rfpId) formData.append('rfp_id', rfpId);
+//---------------------------------------------------------
         try {
-            const response = await fetch('http://127.0.0.1:8000/bot/chat', {
+            const response = await fetch('http://127.0.0.1:8000/chat', {
                 method: 'POST',
-                body: formData // إرسال للـ FastAPI الخاص بك
+                body: formData,
             });
 
             const data = await response.json();
             setMessages((prev) => [...prev, { role: 'ai', text: data.reply }]);
         } catch (error) {
             console.error(error);
+            setMessages((prev) => [...prev, { role: 'ai', text: 'Unable to fetch a response. Please try again.' }]);
         } finally {
             setIsLoading(false);
         }

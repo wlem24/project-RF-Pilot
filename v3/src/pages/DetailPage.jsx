@@ -25,7 +25,14 @@ export default function DetailPage() {
   // ── Data fetching ──────────────────────────────────────────────
   // 🔌 API hook: GET /rfps/{rfpId} — fetches full RFP detail
   const rfpState = useAsync(
-    () => rfpId ? rfpApi.getById(rfpId).then((r) => r.data) : Promise.resolve(null),
+    
+    () => rfpId ? rfpApi.getById(rfpId).then((r) => {
+      console.log(rfpId, "THIS IS THE ID")
+      r.data
+
+
+
+    }) : Promise.resolve(null),
     [rfpId]
   );
 

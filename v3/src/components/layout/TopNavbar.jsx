@@ -1,16 +1,16 @@
 import React from 'react';
 // [MODIFIED] Added NavLink for proper page navigation with active state
 import { NavLink, useNavigate } from 'react-router-dom';
+import { RiMagicLine } from 'react-icons/ri';
 import { useAuth } from '../../auth/AuthProvider';
 
 // [MODIFIED] Replaced NAV_ITEMS array with NAV_LINKS — added paths for navigation
 const NAV_LINKS = [
   { to: '/dashboard',  label: 'Overview'   },
-  { to: '/upload-rfp', label: 'Upload RFP' },
   { to: '/detail',     label: 'RFP Detail' },
 ];
 
-export default function Navbar() {
+export default function Navbar({ onGenerateDraft }) {
   // [REMOVED] useState for active — NavLink handles active state automatically
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -46,6 +46,14 @@ export default function Navbar() {
         >
           Sign out
         </button>
+        
+{/* [ADDED] Draft Workspace button — only rendered on pages that pass onGenerateDraft */}
+        {onGenerateDraft && (
+          <button className="draft-btn" onClick={onGenerateDraft}>
+            <RiMagicLine />
+            Draft Workspace
+          </button>
+        )}
       </div>
     </div>
   );

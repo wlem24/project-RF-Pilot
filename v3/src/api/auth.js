@@ -6,7 +6,10 @@ export async function loginRequest(email, password) {
   const res = await api.post('/auth/login', { email, password });
   const token = res.data.access_token;
   if (token) {
-    localStorage.setItem('token', token);
+    localStorage.setItem('token', token); //to not be an two separate axios clients:
+                                              // Before const token = localStorage.getItem('rfpilot_token');
+                                              // After const token = localStorage.getItem('token');
+
     setAuthToken(token);
   }
   return res.data;

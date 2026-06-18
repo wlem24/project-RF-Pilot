@@ -4,12 +4,8 @@ import { registerRequest } from '../api/auth';
 import '../styles/register.css';
 
 const ROLES = [
-  'Admin',
-  'Proposal Manager',
-  'Sales Manager',
-  'Business Analyst',
-  'Technical Writer',
-  'Reviewer',
+  { value: 'admin', label: 'Admin' },
+  { value: 'user',  label: 'User'  },
 ];
 
 const FEATURES = [
@@ -20,6 +16,8 @@ const FEATURES = [
 ];
 
 export default function Register() {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -27,9 +25,10 @@ export default function Register() {
     password: '',
     confirmPassword: '',
   });
-  const [showPassword, setShowPassword]     = useState(false);
-  const [showConfirm, setShowConfirm]       = useState(false);
-  const [submitted, setSubmitted]           = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm]   = useState(false);
+  const [submitted, setSubmitted]       = useState(false);
+  const [loading, setLoading]           = useState(false);
 
   const passwordMatch =
     form.password && form.confirmPassword
@@ -43,16 +42,15 @@ export default function Register() {
     e.preventDefault();
     setSubmitted(true);
     if (!passwordMatch || !form.role) return;
-    // Send registration to backend. On success, redirect to login.
+    setLoading(true);
     registerRequest(form.fullName, form.email, form.password, form.role)
       .then(() => {
         alert('Account created successfully. Please sign in.');
         navigate('/login');
       })
-      .catch((err) => alert(err?.response?.data?.detail || 'Registration failed'));
+      .catch((err) => alert(err?.response?.data?.detail || 'Registration failed'))
+      .finally(() => setLoading(false));
   };
-
-  const navigate = useNavigate();
 
   return (
     <div className="register-page">
@@ -124,7 +122,7 @@ export default function Register() {
                 >
                   <option value="" disabled>Choose your role…</option>
                   {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                    <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </select>
                 <span className="reg-select-arrow">▾</span>
@@ -186,8 +184,8 @@ export default function Register() {
             </div>
 
             {/* Submit */}
-            <button type="submit" className="reg-btn">
-              Create account
+            <button type="submit" className="reg-btn" disabled={loading}>
+              {loading ? 'Creating account…' : 'Create account'}
             </button>
 
             {/* Terms */}

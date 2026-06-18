@@ -1,6 +1,7 @@
 import React from 'react';
 // [MODIFIED] Added NavLink for proper page navigation with active state
 import { NavLink, useNavigate } from 'react-router-dom';
+import { RiMagicLine } from 'react-icons/ri';
 import { useAuth } from '../../auth/AuthProvider';
 
 // [MODIFIED] Replaced NAV_ITEMS array with NAV_LINKS — added paths for navigation
@@ -10,7 +11,7 @@ const NAV_LINKS = [
   { to: '/detail',     label: 'RFP Detail' },
 ];
 
-export default function Navbar() {
+export default function Navbar({ onGenerateDraft }) {
   // [REMOVED] useState for active — NavLink handles active state automatically
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -32,6 +33,14 @@ export default function Navbar() {
             {label}
           </NavLink>
         ))}
+
+        {onGenerateDraft && (
+          <button className="draft-btn" onClick={onGenerateDraft}>
+            <RiMagicLine />
+            Draft Workspace
+          </button>
+        )}
+
         {user && (
           // [MODIFIED] Show only initials instead of full username
           <div className="nav-user">Hi, {user.username?.slice(0, 2).toUpperCase()}</div>

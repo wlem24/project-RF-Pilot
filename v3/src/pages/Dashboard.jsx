@@ -1,19 +1,16 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';  // useNavigate allows programmatic navigation between pages
-// [MODIFIED] Using v3 Navbar which includes useAuth and logout rename it TopNavbar
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import TopNavbar           from '../components/layout/TopNavbar.jsx';
 import FilterBar        from '../components/dashboard/FilterBar.jsx';
 import KPISection       from '../components/dashboard/KPISection.jsx';
 import TrackingTabs     from '../components/dashboard/TrackingTabs.jsx';
 import BidDecisionCards from '../components/dashboard/BidDecisionCards.jsx';
 import RightPanel       from '../components/dashboard/RightPanel.jsx';
-import AIChat           from '../components//layout/AIChat.jsx';
 
 import '../styles/dashboard.css';
 
 export default function Dashboard() {
-  const [chatOpen, setChatOpen] = useState(false);
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
 
   return (
     <div className="page">
@@ -36,11 +33,10 @@ export default function Dashboard() {
             <i className="ti ti-calendar" style={{ fontSize: 13 }} />
             Today
           </button>
-          {/* [ADDED] navigates to /upload-rfp page */}
-          <button className="btn-sm btn-p" onClick={() => window.location.href = '/upload-rfp'}>
+          <button className="btn-sm btn-p" onClick={() => navigate('/upload-rfp')}>
             <i className="ti ti-plus" style={{ fontSize: 13 }} />
-           Upload RFP 
-          </button> {/* Upload RFP button — navigates to /upload page */}
+           Upload RFP
+          </button>
         </div>
       </div>
 
@@ -58,14 +54,8 @@ export default function Dashboard() {
         </div>
 
         {/* Right panel */}
-        <RightPanel onOpenChat={() => setChatOpen(true)} />
+        <RightPanel onOpenChat={() => {}} />
       </div>
-
-      {/* ── Floating AI Chat ── */}
-      <AIChat
-        isOpen={chatOpen}
-        onToggle={() => setChatOpen((prev) => !prev)}
-      />
 
     </div>
   );

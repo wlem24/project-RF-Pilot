@@ -1,34 +1,39 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 
 from auth_utils import hash_password
-from schemas import RegisterRequest, RegisterResponse
-from store import create_user, get_user_by_email
+from database import get_db
+from models import User, VALID_ROLES
+from schemas import RegisterRequest, RegisterResponse, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-def register_user(payload: RegisterRequest):
-    """Register a new user with a unique email and hashed password.
+def register_user(payload: RegisterRequest, db: Session = Depends(get_db)):
+    if payload.role and payload.role not in VALID_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {', '.join(VALID_ROLES)}",
+        )
 
-    User accounts are stored in SQLite so data persists across server restarts.
-    """
-    if get_user_by_email(payload.email):
+    if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A user with this email already exists.",
         )
 
-    create_user(
-        username=payload.username,
+    user = User(
+        name=payload.name,
         email=payload.email,
-        hashed_password=hash_password(payload.password),
+        password_hash=hash_password(payload.password),
         role=payload.role,
     )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    return {
-        "username": payload.username,
-        "email": payload.email,
-        "role": payload.role,
-        "message": "User registered successfully",
-    }
+    return RegisterResponse(
+        message="User registered successfully",
+        user=UserResponse.model_validate(user),
+    )

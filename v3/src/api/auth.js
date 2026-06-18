@@ -13,8 +13,8 @@ export async function loginRequest(email, password) {
 }
 
 // Register a new user. Returns the server response (201 on success).
-export async function registerRequest(username, email, password, role) {
-  return api.post('/auth/register', { username, email, password, role });
+export async function registerRequest(name, email, password, role) {
+  return api.post('/auth/register', { name, email, password, role });
 }
 
 // Get current user's profile from the server using the stored token.

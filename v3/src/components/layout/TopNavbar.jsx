@@ -7,7 +7,6 @@ import { useAuth } from '../../auth/AuthProvider';
 // [MODIFIED] Replaced NAV_ITEMS array with NAV_LINKS — added paths for navigation
 const NAV_LINKS = [
   { to: '/dashboard',  label: 'Overview'   },
-  { to: '/upload-rfp', label: 'Upload RFP' },
   { to: '/detail',     label: 'RFP Detail' },
 ];
 
@@ -55,6 +54,14 @@ export default function Navbar({ onGenerateDraft }) {
         >
           Sign out
         </button>
+        
+{/* [ADDED] Draft Workspace button — only rendered on pages that pass onGenerateDraft */}
+        {onGenerateDraft && (
+          <button className="draft-btn" onClick={onGenerateDraft}>
+            <RiMagicLine />
+            Draft Workspace
+          </button>
+        )}
       </div>
     </div>
   );

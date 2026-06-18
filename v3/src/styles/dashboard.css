@@ -312,3 +312,24 @@
 .close-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; }
 .close-btn:hover { color: var(--text); }
 .ti { line-height: 1; }
+
+
+/* [ADDED] Draft Workspace button — copied from v4 */
+.draft-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: #4f46e5;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.draft-btn:hover { background: #4338ca; }
+

@@ -1,11 +1,14 @@
 from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
+from uuid import UUID
+from datetime import datetime
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=2, max_length=50)
+    name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8)
-    role: str | None = Field(None, max_length=50)
+    role: Optional[str] = Field(None, max_length=50)
 
 
 class LoginRequest(BaseModel):
@@ -14,13 +17,19 @@ class LoginRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    username: str
+    id: UUID
+    name: str
     email: EmailStr
-    role: str | None = None
+    role: Optional[str] = None
+    avatar_url: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-class RegisterResponse(UserResponse):
+class RegisterResponse(BaseModel):
     message: str = "User registered successfully"
+    user: UserResponse
 
 
 class TokenResponse(BaseModel):

@@ -225,9 +225,20 @@ export default function TrackingTabs() {
   return (
     <div className="card">
       <div style={{ padding: '14px 16px 0' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 12 }}>
-          Tracking
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+            Tracking
+          </div>
+          
+          {/* Upload RFP button — navigates to /upload page  from the tracking tab*/}
+          <button className="btn-sm btn-p" onClick={() => window.location.href = '/upload-rfp'}>
+            <i className="ti ti-plus" style={{ fontSize: 13 }} />
+            Upload RFP
+          </button>
         </div>
+        
+
+
         <div className="tracking-tabs">
           {TABS.map((t) => (
             <button

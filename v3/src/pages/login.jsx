@@ -26,26 +26,28 @@ const EyeOffIcon = () => (
 );
 
 export default function Login() {
+  const navigate = useNavigate();
+  const auth = useAuth();
+
   const [form, setForm] = useState({
     email: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Call AuthProvider.login which handles token storage and profile fetch
+    setLoading(true);
     auth
       .login(form.email, form.password)
       .then(() => navigate('/dashboard'))
-      .catch((err) => alert(err?.response?.data?.detail || 'Login failed'));
+      .catch((err) => alert(err?.response?.data?.detail || 'Login failed'))
+      .finally(() => setLoading(false));
   };
-
-  const navigate = useNavigate();
-  const auth = useAuth();
 
   return (
     <div className="login-page">
@@ -116,8 +118,8 @@ export default function Login() {
             </div>
 
             {/* Submit */}
-            <button type="submit" className="login-btn">
-              Sign in
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
 
             {/* Forgot password link */}

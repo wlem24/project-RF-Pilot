@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RiUpload2Line, RiFileLine, RiCheckLine, RiCloseLine, RiBrainLine } from 'react-icons/ri';
-import TopNavBar      from '../components/layout/TopNavBar.jsx';
+import TopNavBar      from '../components/layout/TopNavbar.jsx';
 import DraftWorkspace from '../components/layout/DraftWorkspace.jsx';
 import RightSidebar   from '../components/sidebar/RightSidebar.jsx';
 import { rfpApi } from '../services/api.js';
@@ -39,9 +39,11 @@ export default function UploadRFPPage() {
       form.append('notes', notes);
 
       const response = await rfpApi.upload(form);
-      const { rfp_id, summary: aiSummary } = response.data;
+      const { rfp_id, title, summary: aiSummary } = response.data;
 
       setSummary(aiSummary);
+      // Link this RFP to the AI chat session immediately — survives navigation/refresh.
+      localStorage.setItem('rfpilot_active_rfp', JSON.stringify({ id: rfp_id, filename: title }));
       navigate(`/detail?id=${rfp_id}`);
     } catch (uploadError) {
       console.error(uploadError);

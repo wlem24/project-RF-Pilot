@@ -36,8 +36,10 @@ export const commentApi = {
 };
 
 // ── Notifications ─────────────────────────────
+// Stubbed: GET /notifications has no backend route yet. Resolve empty
+// instead of hitting a guaranteed 404 on every protected page load.
 export const notifApi = {
-  list:       ()    => api.get('/notifications'),
+  list:       ()    => Promise.resolve({ data: [] }),
   markRead:   (id)  => api.post(`/notifications/${id}/read`),
   markAllRead: ()   => api.post('/notifications/read-all'),
 };

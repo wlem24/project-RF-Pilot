@@ -1,12 +1,40 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
+
+// Active RFP persists across navigation/refresh — written by UploadRFPPage.jsx
+// (right after upload) and DetailPage.jsx (when an existing RFP is opened).
+const ACTIVE_RFP_KEY = 'rfpilot_active_rfp';
+
+function readActiveRfp() {
+    try {
+        return JSON.parse(localStorage.getItem(ACTIVE_RFP_KEY) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function greetingFor(rfp) {
+    return rfp
+        ? `I've analyzed the uploaded RFP${rfp.filename ? ` "${rfp.filename}"` : ''}. How can I help you with requirements analysis, compliance checks, summarization, or proposal preparation?`
+        : 'No RFP loaded yet. Upload or open an RFP to get started.';
+}
+
+// Greeting messages are tagged so we can always find-and-replace the single
+// active greeting, regardless of how many times the active RFP has changed
+// before it (uploading a 2nd/3rd RFP, opening a different RFP, etc).
+function greetingMessage(rfp) {
+    return { role: 'ai', text: greetingFor(rfp), isGreeting: true };
+}
 
 export default function AIChat({ isOpen, onToggle }) {
     const [searchParams] = useSearchParams();
-    const rfpId = searchParams.get('id');
-    const [messages, setMessages] = useState([
-        { role: 'ai', text: rfpId ? 'Hello! Ask a question about this RFP.' : 'No RFP selected. Please open an RFP detail page first.' },
-    ]);
+    const location = useLocation();
+    const urlRfpId = searchParams.get('id');
+
+    const [activeRfp, setActiveRfp] = useState(readActiveRfp);
+    const rfpId = urlRfpId || activeRfp?.id || null;
+
+    const [messages, setMessages] = useState(() => [greetingMessage(activeRfp)]);
     const [inputVal, setInputVal] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
@@ -15,6 +43,28 @@ export default function AIChat({ isOpen, onToggle }) {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Re-check the active RFP on every navigation (e.g. right after an upload
+    // navigates to /detail?id=X) and greet the user as soon as it changes.
+    useEffect(() => {
+        const stored = readActiveRfp();
+        const storedId = stored?.id != null ? String(stored.id) : null;
+        const currentId = activeRfp?.id != null ? String(activeRfp.id) : null;
+        if (storedId && storedId !== currentId) {
+            setActiveRfp(stored);
+            // Drop the previous greeting (whatever it was — the initial "no
+            // RFP" placeholder, or a prior RFP's greeting) and append exactly
+            // one fresh greeting for the newly active RFP. Filtering by
+            // `isGreeting` rather than position means this is correct no
+            // matter how many times the active RFP has already changed, and
+            // is naturally idempotent if this effect ever runs twice for the
+            // same transition (e.g. React Strict Mode's double-invoke).
+            setMessages((prev) => [
+                ...prev.filter((m) => !m.isGreeting),
+                greetingMessage(stored),
+            ]);
+        }
+    }, [location, urlRfpId]);
 
 
     // داخل دالة sendMsg في AIChat.jsx
@@ -33,7 +83,7 @@ export default function AIChat({ isOpen, onToggle }) {
         if (rfpId) formData.append('rfp_id', rfpId);
 //---------------------------------------------------------
         try {
-            const response = await fetch('http://127.0.0.1:8000/chat', {
+            const response = await fetch('http://127.0.0.1:8001/rfps/chat', {
                 method: 'POST',
                 body: formData,
             });

@@ -34,21 +34,32 @@ export default function Register() {
     form.password && form.confirmPassword
       ? form.password === form.confirmPassword
       : null;
+  const passwordTooShort = form.password.length > 0 && form.password.length < 8;
 
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  // FastAPI/Pydantic returns `detail` as a string for simple HTTPExceptions,
+  // but as an array of { msg, loc, ... } objects for validation errors —
+  // alert()'ing the array directly would just show "[object Object]".
+  const describeError = (err) => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) return detail.map((d) => d.msg).join('\n');
+    return 'Registration failed';
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitted(true);
-    if (!passwordMatch || !form.role) return;
+    if (!passwordMatch || passwordTooShort || !form.role) return;
     setLoading(true);
     registerRequest(form.fullName, form.email, form.password, form.role)
       .then(() => {
         alert('Account created successfully. Please sign in.');
         navigate('/login');
       })
-      .catch((err) => alert(err?.response?.data?.detail || 'Registration failed'))
+      .catch((err) => alert(describeError(err)))
       .finally(() => setLoading(false));
   };
 
@@ -134,7 +145,7 @@ export default function Register() {
               <label className="reg-label">Password</label>
               <div className="reg-pw-wrapper">
                 <input
-                  className="reg-input"
+                  className={`reg-input${submitted && passwordTooShort ? ' error' : ''}`}
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min. 8 characters"
                   value={form.password}
@@ -150,6 +161,9 @@ export default function Register() {
                   {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
+              {submitted && passwordTooShort && (
+                <p className="reg-validation-msg error">✕ Password must be at least 8 characters.</p>
+              )}
             </div>
 
             {/* Confirm Password */}

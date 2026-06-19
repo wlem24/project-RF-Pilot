@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 // [MODIFIED] Replaced TopNavBar with Navbar — uses useAuth and logout from v3
 import TopNavbar from '../components/layout/TopNavbar.jsx';
@@ -25,14 +25,7 @@ export default function DetailPage() {
   // ── Data fetching ──────────────────────────────────────────────
   // 🔌 API hook: GET /rfps/{rfpId} — fetches full RFP detail
   const rfpState = useAsync(
-    
-    () => rfpId ? rfpApi.getById(rfpId).then((r) => {
-      console.log(rfpId, "THIS IS THE ID")
-      r.data
-
-
-
-    }) : Promise.resolve(null),
+    () => rfpId ? rfpApi.getById(rfpId).then((r) => r.data) : Promise.resolve(null),
     [rfpId]
   );
 
@@ -45,6 +38,17 @@ export default function DetailPage() {
   const rfp           = rfpState.data;
   const notifications = notifState.data || [];
   const deadlines     = []; // 🔌 Replace with deadlineState.data
+
+  // Keep the AI chat's active RFP in sync when an existing RFP is opened
+  // directly (not just right after upload).
+  useEffect(() => {
+    if (rfp?.id) {
+      localStorage.setItem(
+        'rfpilot_active_rfp',
+        JSON.stringify({ id: rfp.id, filename: rfp.filename || rfp.title })
+      );
+    }
+  }, [rfp?.id, rfp?.filename, rfp?.title]);
 
   const handleUpdateApproval = useCallback(async (stepId, status) => {
     if (!rfpId) return;

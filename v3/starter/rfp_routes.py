@@ -194,7 +194,7 @@ async def chat_with_bot(prompt: str = Form(...), rfp_id: Optional[int] = Form(No
         
         if rfp:
             print(f"--- [CHAT LOG] Found RFP in DB! Loading full text for filename: {rfp['filename']} ---")
-            context = f"Context from Requested RFP #{requested_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text']}\n\n"
+            context = f"Context from Requested RFP #{requested_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text'][:6000]}\n\n"
             system_instruction = (
                 "You are an RFP AI assistant and ur name is Michael Scott. The user explicitly requested "
                 "this archived file. Answer their question or summarize the file using this full RFP text."
@@ -212,7 +212,7 @@ async def chat_with_bot(prompt: str = Form(...), rfp_id: Optional[int] = Form(No
         if rfp is None:
             raise HTTPException(status_code=404, detail="RFP not found.")
 
-        context = f"Context from RFP #{rfp_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text']}\n\n"
+        context = f"Context from RFP #{rfp_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text'][:6000]}\n\n"
         system_instruction = "You are an RFP AI assistant and ur name is Michael Scott. Answer only from the provided RFP context."
         user_message = f"{context}Please answer the user question using the RFP text above.\nQuestion: {prompt}"
 

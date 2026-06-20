@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import engine, Base
-import models  # registers User with Base before create_all
+import models  # registers all 18 models with Base
+
 from register import router as register_router
 from login import router as login_router
 from rfp_routes import router as rfp_router
@@ -22,15 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
-
-
 app.include_router(register_router)
 app.include_router(login_router)
-app.include_router(rfp_router, prefix="/rfps", tags=["RFP Management"])
+app.include_router(rfp_router)
 
 
 @app.get("/")

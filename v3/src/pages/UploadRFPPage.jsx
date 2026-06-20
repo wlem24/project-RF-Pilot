@@ -17,40 +17,38 @@ export default function UploadRFPPage() {
   const [uploading,  setUploading]  = useState(false);
   const [error,      setError]      = useState(null);
   const [summary,    setSummary]    = useState('');
+  const [uploadedId, setUploadedId] = useState(null);
   const [draftOpen,  setDraftOpen]  = useState(false);
 
   const notifications = [];
   const deadlines     = [];
 
-  const handleFileChange = (f) => { if (f) setFile(f); };
-
-  const handleProceed = async () => {
-    if (!file) {
-      setError('Please select an RFP file.');
-      return;
-    }
-
+  const handleFileChange = async (f) => {
+    if (!f) return;
+    setFile(f);
     setError(null);
+    setSummary('');
+    setUploadedId(null);
     setUploading(true);
 
     try {
       const form = new FormData();
-      form.append('file', file);
-      form.append('notes', notes);
-
-      const response = await rfpApi.upload(form);
-      const { rfp_id, title, summary: aiSummary } = response.data;
-
-      setSummary(aiSummary);
-      // Link this RFP to the AI chat session immediately — survives navigation/refresh.
-      localStorage.setItem('rfpilot_active_rfp', JSON.stringify({ id: rfp_id, filename: title }));
-      navigate(`/detail?id=${rfp_id}`);
+      form.append('file', f);
+      const response = await rfpApi.upload(form, f.name);
+      const { rfp_id, summary: aiSummary } = response.data;
+      localStorage.setItem('rfpilot_active_rfp', JSON.stringify({ id: rfp_id, filename: f.name }));
+      setSummary(aiSummary || '');
+      setUploadedId(rfp_id);
     } catch (uploadError) {
       console.error(uploadError);
       setError('Upload failed. Please try again.');
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleProceed = () => {
+    if (uploadedId) navigate(`/detail?id=${uploadedId}`);
   };
 
   return (
@@ -151,9 +149,9 @@ export default function UploadRFPPage() {
             <button
               className="btn btn-primary btn-lg btn-full"
               onClick={handleProceed}
-              disabled={!file || uploading}
+              disabled={!uploadedId || uploading}
             >
-              {uploading ? 'Uploading…' : 'Proceed to Overview Info →'}
+              {uploading ? 'Analyzing RFP…' : 'Proceed to Overview Info →'}
             </button>
 
           </div>

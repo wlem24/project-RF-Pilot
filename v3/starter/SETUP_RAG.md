@@ -294,3 +294,4 @@ Chat Question
 - **`.env` is never committed** — each developer must create their own with their own credentials
 - **pgvector must be enabled** before running migrations, otherwise migrations will fail
 - **OpenAI API key must have credits** — the pipeline uses text-embedding-ada-002 and GPT-3.5-turbo/GPT-4o
+- **⚠️ Important — `database.py` has a hardcoded fallback password** — `database.py` line 8 contains a default DB password for local dev. Make sure your `.env` has `DATABASE_URL` set so it overrides the fallback. Never use the hardcoded value in production.

@@ -40,3 +40,25 @@ class TokenResponse(BaseModel):
 class GenerateDraftRequest(BaseModel):
     draftType: str = Field(..., min_length=1, max_length=100)
     prompt: str | None = Field(None, max_length=4000)
+
+
+# ── RAG Phase 4 schemas ────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    rfp_id: Optional[UUID] = None
+    session_id: str
+    question: str
+    top_k: int = 5
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    answer: str
+    context_used: Optional[list] = None
+    prompt_tokens: Optional[int] = None
+
+
+class IngestRequest(BaseModel):
+    rfp_id: UUID
+    rfp_document_id: UUID
+    raw_text: str

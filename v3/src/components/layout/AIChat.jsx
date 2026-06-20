@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
+import { rfpApi } from '../../services/api.js';
 
 // Active RFP persists across navigation/refresh — written by UploadRFPPage.jsx
 // (right after upload) and DetailPage.jsx (when an existing RFP is opened).
@@ -33,6 +34,8 @@ export default function AIChat({ isOpen, onToggle }) {
 
     const [activeRfp, setActiveRfp] = useState(readActiveRfp);
     const rfpId = urlRfpId || activeRfp?.id || null;
+    // Each browser tab gets its own session so chat history stays scoped
+    const sessionId = useRef(`session-${Date.now()}`).current;
 
     const [messages, setMessages] = useState(() => [greetingMessage(activeRfp)]);
     const [inputVal, setInputVal] = useState('');
@@ -77,19 +80,10 @@ export default function AIChat({ isOpen, onToggle }) {
         setInputVal('');
         setIsLoading(true);
 
-        // Allow global archive queries even when no rfpId is present.
-        const formData = new FormData();
-        formData.append('prompt', val);
-        if (rfpId) formData.append('rfp_id', rfpId);
-//---------------------------------------------------------
         try {
-            const response = await fetch('http://127.0.0.1:8001/rfps/chat', {
-                method: 'POST',
-                body: formData,
-            });
-
-            const data = await response.json();
-            setMessages((prev) => [...prev, { role: 'ai', text: data.reply }]);
+            const response = await rfpApi.chat(rfpId, val, sessionId);
+            const reply = response.data.answer;
+            setMessages((prev) => [...prev, { role: 'ai', text: reply }]);
         } catch (error) {
             console.error(error);
             setMessages((prev) => [...prev, { role: 'ai', text: 'Unable to fetch a response. Please try again.' }]);

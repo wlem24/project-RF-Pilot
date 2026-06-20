@@ -21,7 +21,8 @@ api.interceptors.request.use((config) => {
 // ── RFP ──────────────────────────────────────
 export const rfpApi = {
   getById:       (id)    => api.get(`/rfps/${id}`),
-  upload:        (form)  => api.post('/rfps/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  upload:        (form, title) => api.post(`/rfps/upload?title=${encodeURIComponent(title)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  chat:          (rfpId, prompt, sessionId) => api.post('/rfps/chat', { rfp_id: rfpId, session_id: sessionId, question: prompt, top_k: 5 }),
   triggerAnalysis: (id)  => api.post(`/rfps/${id}/analyze`),
   generateDraft: (id, payload) => api.post(`/rfps/${id}/generate-draft`, payload),
   updateApproval:(rfpId, stepId, status) => api.patch(`/rfps/${rfpId}/approval/${stepId}`, { status }),

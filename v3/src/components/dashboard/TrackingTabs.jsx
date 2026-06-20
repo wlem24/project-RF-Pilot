@@ -230,7 +230,7 @@ export default function TrackingTabs() {
             Tracking
           </div>
           
-          {/* Upload RFP button — navigates to /upload page  from the tracking tab*/}
+          {/* Upload RFP button — moved here from Dashboard page header*/}
           <button className="btn-sm btn-p" onClick={() => window.location.href = '/upload-rfp'}>
             <i className="ti ti-plus" style={{ fontSize: 13 }} />
             Upload RFP

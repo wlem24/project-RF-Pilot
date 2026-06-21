@@ -62,3 +62,30 @@ class IngestRequest(BaseModel):
     rfp_id: UUID
     rfp_document_id: UUID
     raw_text: str
+
+
+class CommentCreate(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    parent_id: Optional[UUID] = None
+
+
+class DecisionUpdate(BaseModel):
+    decision:           Optional[str] = Field(None, description="BID or NO BID — omit to update only notes/resources")
+    notes:              Optional[str] = None
+    required_resources: Optional[str] = None
+    expected_risks:     Optional[str] = None
+    budget_estimate:    Optional[str] = None
+
+
+# ── Invitations & Team ─────────────────────────────────────────
+
+class InvitationCreate(BaseModel):
+    email: EmailStr
+    role:  str = Field("user", description="Role to assign on accept: 'admin' or 'user'")
+
+class InvitationAccept(BaseModel):
+    name:     str = Field(..., min_length=2, max_length=100)
+    password: str = Field(..., min_length=8)
+
+class RoleUpdate(BaseModel):
+    role: str = Field(..., description="New role: 'admin' or 'user'")

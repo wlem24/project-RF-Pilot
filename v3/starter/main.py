@@ -7,6 +7,9 @@ import models  # registers all 18 models with Base
 from register import router as register_router
 from login import router as login_router
 from rfp_routes import router as rfp_router
+from notification_routes import notif_router, deadline_router
+from invitation_routes import router as invitation_router
+from team_routes import router as team_router
 
 app = FastAPI(title="RFP AI Assistant API")
 
@@ -26,6 +29,10 @@ app.add_middleware(
 app.include_router(register_router)
 app.include_router(login_router)
 app.include_router(rfp_router)
+app.include_router(notif_router)
+app.include_router(deadline_router)
+app.include_router(invitation_router)
+app.include_router(team_router)
 
 
 @app.get("/")

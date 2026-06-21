@@ -62,6 +62,7 @@ class RFP(Base):
     uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title       = Column(String, nullable=False)
     status      = Column(String, default="draft")
+    priority    = Column(String(20), default="medium")   # low / medium / high / critical
     file_url    = Column(Text, nullable=True)
     notes       = Column(Text, nullable=True)
     created_at  = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
@@ -75,13 +76,15 @@ class RFP(Base):
     bid_decisions       = relationship("BidDecision", back_populates="rfp")
     risks               = relationship("Risk", back_populates="rfp")
     resources           = relationship("Resource", back_populates="rfp")
-    approval_steps      = relationship("ApprovalStep", back_populates="rfp")
+    approval_steps      = relationship("ApprovalStep", back_populates="rfp", order_by="ApprovalStep.step_order")
     comments            = relationship("Comment", back_populates="rfp")
     notifications       = relationship("Notification", back_populates="rfp")
     evaluation_criteria = relationship("EvaluationCriteria", back_populates="rfp")
     draft_documents     = relationship("DraftDocument", back_populates="rfp")
     document_chunks     = relationship("DocumentChunk", back_populates="rfp")
     chat_history        = relationship("AIChatHistory", back_populates="rfp")
+    requirements        = relationship("Requirement",  back_populates="rfp", cascade="all, delete-orphan")
+    rfp_deadlines       = relationship("RFPDeadline",  back_populates="rfp", cascade="all, delete-orphan")
 
 
 class RFPInformation(Base):
@@ -175,11 +178,15 @@ class BidDecision(Base):
     technical_fit    = Column(Numeric, nullable=True)
     financial_fit    = Column(Numeric, nullable=True)
     resource_fit     = Column(Numeric, nullable=True)
-    positive_flags   = Column(JSONB, nullable=True)
-    risk_flags       = Column(JSONB, nullable=True)
-    alignment_matrix = Column(JSONB, nullable=True)
-    created_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    positive_flags      = Column(JSONB, nullable=True)
+    risk_flags          = Column(JSONB, nullable=True)
+    alignment_matrix    = Column(JSONB, nullable=True)
+    risk_level          = Column(Numeric, nullable=True)   # 0-100, higher = more risky
+    required_resources  = Column(Text, nullable=True)
+    expected_risks      = Column(Text, nullable=True)
+    budget_estimate     = Column(Text, nullable=True)
+    created_at          = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at          = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     rfp = relationship("RFP", back_populates="bid_decisions")
 
@@ -343,11 +350,15 @@ class Invitation(Base):
     invited_by  = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     accepted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     email       = Column(String, nullable=False)
+    role        = Column(String(50), default="user")    # role to assign on accept
     token       = Column(String, unique=True, nullable=True)
     status      = Column(String, default="pending")
     expires_at  = Column(DateTime(timezone=True), nullable=True)
     created_at  = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at  = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    inviter     = relationship("User", foreign_keys=[invited_by])
+    accepter    = relationship("User", foreign_keys=[accepted_by])
 
 
 # ─────────────────────────────────────────────
@@ -387,3 +398,41 @@ class DraftVersion(Base):
     created_at        = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     draft_document = relationship("DraftDocument", back_populates="versions")
+
+
+# ─────────────────────────────────────────────
+#  PHASE 7 — Requirements & Deadlines
+# ─────────────────────────────────────────────
+
+class Requirement(Base):
+    __tablename__ = "requirements"
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('technical','legal','commercial')",
+            name="requirements_category_check",
+        ),
+    )
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rfp_id         = Column(UUID(as_uuid=True), ForeignKey("rfps.id", ondelete="CASCADE"), nullable=False)
+    category       = Column(String(50), nullable=False)
+    text           = Column(Text, nullable=False)
+    is_mandatory   = Column(Boolean, default=True)
+    source_section = Column(String(200), nullable=True)
+    created_at     = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    rfp = relationship("RFP", back_populates="requirements")
+
+
+class RFPDeadline(Base):
+    __tablename__ = "rfp_deadlines"
+
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rfp_id           = Column(UUID(as_uuid=True), ForeignKey("rfps.id", ondelete="CASCADE"), nullable=False)
+    title            = Column(String(200), nullable=False)
+    due_date         = Column(String(300), nullable=True)
+    due_date_parsed  = Column(DateTime(timezone=True), nullable=True)  # machine-comparable date
+    urgency          = Column(String(20), default="normal")
+    created_at       = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    rfp = relationship("RFP", back_populates="rfp_deadlines")

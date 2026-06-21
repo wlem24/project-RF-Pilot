@@ -5,14 +5,15 @@ import { RiMagicLine } from 'react-icons/ri';
 import { useAuth } from '../../auth/AuthProvider';
 
 // [MODIFIED] Replaced NAV_ITEMS array with NAV_LINKS — added paths for navigation
-const NAV_LINKS = [
-  { to: '/dashboard',  label: 'Overview'   },
-  { to: '/detail',     label: 'RFP Detail' },
-];
-
 export default function Navbar({ onGenerateDraft }) {
-  // [REMOVED] useState for active — NavLink handles active state automatically
   const { user, logout } = useAuth();
+
+  const NAV_LINKS = [
+    { to: '/dashboard', label: 'Overview'   },
+    { to: '/detail',    label: 'RFP Detail' },
+    // Team page is visible to all authenticated users; invite controls are admin-gated inside
+    { to: '/team',      label: 'Team'        },
+  ];
   const navigate = useNavigate();
 
   return (
@@ -42,7 +43,7 @@ export default function Navbar({ onGenerateDraft }) {
 
         {user && (
           // [MODIFIED] Show only initials instead of full username
-          <div className="nav-user">Hi, {user.username?.slice(0, 2).toUpperCase()}</div>
+          <div className="nav-user">Hi, {(user.name || user.username || '?').slice(0, 2).toUpperCase()}</div>
         )}
         <button
           className="signout"

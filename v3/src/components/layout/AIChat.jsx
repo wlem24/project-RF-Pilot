@@ -52,7 +52,10 @@ export default function AIChat({ isOpen, onToggle }) {
     useEffect(() => {
         const stored = readActiveRfp();
 
-            if (!stored && activeRfp) {
+            // If localStorage was cleared (e.g. Dashboard removed the key) but the component
+        // still holds a stale activeRfp in state, reset everything so the chat greets
+        // the user with "No RFP loaded" and sends requests without an rfp_id (Priority 3).
+        if (!stored && activeRfp) {
             setActiveRfp(null);
             setMessages([greetingMessage(null)]);
             return;

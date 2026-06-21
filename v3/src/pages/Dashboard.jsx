@@ -12,9 +12,12 @@ import '../styles/dashboard.css';
 export default function Dashboard() {
   const navigate = useNavigate();
 
+  // Clear the active RFP from localStorage when the user navigates to the Dashboard.
+  // This ensures the AI chat panel is no longer scoped to a specific RFP and instead
+  // falls back to Priority 3 (list all available RFPs) in the chat endpoint.
   useEffect(() => {
     localStorage.removeItem('rfpilot_active_rfp');
-}, []);
+  }, []);
 
 
   return (

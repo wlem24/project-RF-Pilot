@@ -34,8 +34,18 @@ export default function AIChat({ isOpen, onToggle }) {
 
     const [activeRfp, setActiveRfp] = useState(readActiveRfp);
     const rfpId = urlRfpId || activeRfp?.id || null;
-    // Each browser tab gets its own session so chat history stays scoped
-    const sessionId = useRef(`session-${Date.now()}`).current;
+    // Session ID persists for the lifetime of the browser tab (Fix 1).
+    // sessionStorage survives in-tab navigation but resets on tab close,
+    // which is the correct contract for a single conversation session.
+    const sessionId = useRef((() => {
+        const KEY = 'rfpilot_session_id';
+        let id = sessionStorage.getItem(KEY);
+        if (!id) {
+            id = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            sessionStorage.setItem(KEY, id);
+        }
+        return id;
+    })()).current;
 
     const [messages, setMessages] = useState(() => [greetingMessage(activeRfp)]);
     const [inputVal, setInputVal] = useState('');

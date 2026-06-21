@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DEFAULT_LABELS, FILTER_OPTIONS } from '../../data/constants.js';
+import { FILTER_OPTIONS, DEFAULT_LABELS } from '../../data/constants.js';
 
-// ── Individual filter dropdown ────────────────────────────────────
 function FilterDropdown({ name, icon, label, options, activeValue, onSelect, openName, setOpenName }) {
-  const ref = useRef(null);
+  const ref    = useRef(null);
   const isOpen = openName === name;
-  const isActive = activeValue !== null;
 
-  // Close on outside click
   useEffect(() => {
     function handler(e) {
       if (ref.current && !ref.current.contains(e.target)) {
@@ -21,8 +18,7 @@ function FilterDropdown({ name, icon, label, options, activeValue, onSelect, ope
   return (
     <div className="filter-select" ref={ref}>
       <button
-        className={`filter-btn${isActive ? ' active' : ''}`}
-        id={`fb-${name}`}
+        className={`filter-btn${activeValue !== null ? ' active' : ''}`}
         onClick={() => setOpenName(isOpen ? null : name)}
       >
         <i className={`ti ${icon}`} style={{ fontSize: 13 }} />
@@ -32,95 +28,105 @@ function FilterDropdown({ name, icon, label, options, activeValue, onSelect, ope
 
       {isOpen && (
         <div className="dropdown">
-          {options.map((opt, idx) => {
-            const isDefault = opt.value === DEFAULT_LABELS[name];
-            return (
-              <React.Fragment key={opt.value}>
-                {idx === 1 && <div className="dd-divider" />}
-                <div
-                  className="dd-item"
-                  onClick={() => {
-                    onSelect(name, opt.value);
-                    setOpenName(null);
-                  }}
-                >
-                  {/* Dot for status */}
-                  {opt.dot && (
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: opt.dot, display: 'inline-block' }} />
-                  )}
-                  {/* Avatar for owner */}
-                  {opt.initials && (
-                    <span style={{
-                      width: 20, height: 20, borderRadius: '50%',
-                      background: opt.bg, color: opt.color,
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 9, fontWeight: 700
-                    }}>
-                      {opt.initials}
-                    </span>
-                  )}
-                  {/* Clock icon for deadline */}
-                  {opt.iconColor && !opt.initials && (
-                    <i
-                      className={`ti ${opt.icon || 'ti-clock'}`}
-                      style={{ fontSize: 12, color: opt.iconColor }}
-                    />
-                  )}
-                  {/* Flag icon for priority */}
-                  {name === 'priority' && !isDefault && opt.iconColor && (
-                    <i className="ti ti-flag-filled" style={{ fontSize: 12, color: opt.iconColor }} />
-                  )}
-                  {opt.label}
-                </div>
-              </React.Fragment>
-            );
-          })}
+          {options.map((opt, idx) => (
+            <React.Fragment key={opt.value}>
+              {idx === 1 && <div className="dd-divider" />}
+              <div
+                className="dd-item"
+                onClick={() => { onSelect(name, opt.value); setOpenName(null); }}
+              >
+                {opt.dot && (
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: opt.dot, display: 'inline-block' }} />
+                )}
+                {opt.initials && (
+                  <span style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: opt.bg || '#e5e7eb', color: opt.color || '#374151',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 700,
+                  }}>
+                    {opt.initials}
+                  </span>
+                )}
+                {opt.iconColor && !opt.initials && (
+                  <i className={`ti ${opt.icon || 'ti-clock'}`} style={{ fontSize: 12, color: opt.iconColor }} />
+                )}
+                {opt.label}
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// ── FilterBar ─────────────────────────────────────────────────────
-export default function FilterBar() {
+const FILTER_CONFIGS = [
+  { name: 'status',         icon: 'ti-circle-dot',    label: 'Status'         },
+  { name: 'client',         icon: 'ti-building',       label: 'Client'         },
+  { name: 'deadline_range', icon: 'ti-calendar-event', label: 'Deadline'       },
+  { name: 'owner',          icon: 'ti-user',           label: 'Assigned Owner' },
+  { name: 'priority',       icon: 'ti-flag',           label: 'Priority'       },
+];
+
+export default function FilterBar({ onChange, clientOptions, ownerOptions }) {
   const [activeFilters, setActiveFilters] = useState({});
-  const [openName, setOpenName] = useState(null);
+  const [openName, setOpenName]           = useState(null);
+
+  // Merge runtime dynamic options with static shapes from constants
+  const OPTIONS = {
+    ...FILTER_OPTIONS,
+    client: clientOptions?.length
+      ? [{ value: 'All Clients', label: 'All Clients' }, ...clientOptions]
+      : FILTER_OPTIONS.client,
+    owner: ownerOptions?.length
+      ? [{ value: 'All Owners', label: 'All Owners' },
+         ...ownerOptions.map(o => ({
+           value: o.name,
+           label: o.name,
+           initials: o.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
+           bg: '#4f46e520', color: '#6366f1',
+         }))]
+      : FILTER_OPTIONS.owner,
+  };
 
   function handleSelect(type, value) {
-    if (value === DEFAULT_LABELS[type]) {
-      setActiveFilters((prev) => { const n = { ...prev }; delete n[type]; return n; });
+    const defaultVal = DEFAULT_LABELS[type];
+    let next;
+    if (value === defaultVal) {
+      const copy = { ...activeFilters };
+      delete copy[type];
+      next = copy;
     } else {
-      setActiveFilters((prev) => ({ ...prev, [type]: value }));
+      next = { ...activeFilters, [type]: value };
     }
+    setActiveFilters(next);
+    onChange?.(next);
   }
 
   function removeFilter(type) {
-    setActiveFilters((prev) => { const n = { ...prev }; delete n[type]; return n; });
+    const copy = { ...activeFilters };
+    delete copy[type];
+    setActiveFilters(copy);
+    onChange?.(copy);
   }
 
   function clearAll() {
     setActiveFilters({});
+    onChange?.({});
   }
 
   const hasFilters = Object.keys(activeFilters).length > 0;
 
-  const FILTER_CONFIGS = [
-    { name: 'status',   icon: 'ti-circle-dot',     label: 'Status' },
-    { name: 'client',   icon: 'ti-building',        label: 'Client' },
-    { name: 'deadline', icon: 'ti-calendar-event',  label: 'Deadline' },
-    { name: 'owner',    icon: 'ti-user',            label: 'Assigned Owner' },
-    { name: 'priority', icon: 'ti-flag',            label: 'Priority' },
-  ];
-
   return (
     <div className="filter-bar">
-      {FILTER_CONFIGS.map((cfg) => (
+      {FILTER_CONFIGS.map(cfg => (
         <FilterDropdown
           key={cfg.name}
           name={cfg.name}
           icon={cfg.icon}
           label={cfg.label}
-          options={FILTER_OPTIONS[cfg.name]}
+          options={OPTIONS[cfg.name] || []}
           activeValue={activeFilters[cfg.name] ?? null}
           onSelect={handleSelect}
           openName={openName}
@@ -130,8 +136,7 @@ export default function FilterBar() {
 
       <div className="filter-divider" />
 
-      {/* Active tags */}
-      <div id="activeTags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {Object.entries(activeFilters).map(([key, val]) => (
           <div key={key} className="active-tag">
             {val}

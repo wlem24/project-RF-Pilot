@@ -1,41 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
-import { TOP_CLIENTS, DEADLINES, CHART_GRID, CHART_TICKS } from '../../data/constants.js';
 
 Chart.register(...registerables);
 
-// ── Pipeline Tab ──────────────────────────────────────────────────
-function PipelineTab() {
+const CHART_GRID  = 'rgba(255,255,255,0.05)';
+const CHART_TICKS = '#484f58';
+
+// ── Pipeline Tab ───────────────────────────────────────────────────
+function PipelineTab({ pipelineData = [], topClients = [] }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
 
   useEffect(() => {
-    if (!canvasRef.current || chartRef.current) return;
+    if (!canvasRef.current) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    const labels = pipelineData.map(d => d.month);
+    const values = pipelineData.map(d => d.value);
+
     chartRef.current = new Chart(canvasRef.current, {
       type: 'line',
       data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+        labels,
         datasets: [
           {
-            // [MODIFIED] Zeroed out — TODO: Replace with API call when backend is ready
-            // GET /api/tracking/pipeline → { actual: [...] }
-            data: [0, 0, 0, 0, 0, 0, 0],
+            data: values,
             borderColor: '#4f46e5',
             borderWidth: 2,
-            pointRadius: 0,
+            pointRadius: values.some(v => v > 0) ? 4 : 0,
             tension: 0.4,
             fill: true,
             backgroundColor: '#4f46e510',
-          },
-          {
-            // [MODIFIED] Zeroed out — TODO: Replace with API call when backend is ready
-            // GET /api/tracking/pipeline → { target: [...] }
-            data: [0, 0, 0, 0, 0, 0, 0],
-            borderColor: '#484f58',
-            borderWidth: 1.5,
-            borderDash: [4, 4],
-            pointRadius: 0,
-            tension: 0.4,
           },
         ],
       },
@@ -53,14 +48,16 @@ function PipelineTab() {
             ticks: {
               color: CHART_TICKS,
               font: { size: 10 },
-              callback: (v) => v / 1000 + 'K',
+              stepSize: 1,
+              callback: v => (v % 1 === 0 ? v : ''),
             },
+            beginAtZero: true,
           },
         },
       },
     });
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, []);
+  }, [pipelineData]);
 
   return (
     <div style={{ padding: '14px 16px' }}>
@@ -72,38 +69,44 @@ function PipelineTab() {
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', marginBottom: 10 }}>
             Top clients
           </div>
-          {/* TODO: Replace with API call when backend is ready
-              GET /api/clients/top → [{ name, pct }] */}
-          {TOP_CLIENTS.map((c) => (
-            <div key={c.name} className="cl-row">
-              <span style={{ color: 'var(--muted)', fontSize: 12 }}>{c.name}</span>
-              <div className="cl-bg">
-                <div className="cl-fill" style={{ width: `${c.pct}%` }} />
+          {topClients.length === 0 ? (
+            <p style={{ fontSize: 11, color: 'var(--faint)' }}>No client data yet</p>
+          ) : (
+            topClients.map(c => (
+              <div key={c.name} className="cl-row">
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>{c.name}</span>
+                <div className="cl-bg">
+                  <div className="cl-fill" style={{ width: `${c.pct}%` }} />
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ── Deadlines Tab ─────────────────────────────────────────────────
-function DeadlinesTab() {
+// ── Deadlines Tab ──────────────────────────────────────────────────
+function DeadlinesTab({ deadlines = [] }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
 
+  // Bucket by urgency: urgent vs normal
+  const urgentCount = deadlines.filter(d => d.urgency === 'urgent').length;
+  const normalCount = deadlines.length - urgentCount;
+
   useEffect(() => {
-    if (!canvasRef.current || chartRef.current) return;
+    if (!canvasRef.current) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
     chartRef.current = new Chart(canvasRef.current, {
       type: 'bar',
       data: {
-        labels: ['This Week', 'Next Week', 'Jun', 'Jul'],
+        labels: ['Urgent', 'Normal'],
         datasets: [{
-          // [MODIFIED] Zeroed out — TODO: Replace with API call when backend is ready
-          // GET /api/deadlines/chart → { counts: [...] }
-          data: [0, 0, 0, 0],
-          backgroundColor: ['#E24B4A90', '#EF9F2790', '#4f46e590', '#1D9E7590'],
+          data: [urgentCount, normalCount],
+          backgroundColor: ['#E24B4A90', '#4f46e590'],
           borderRadius: 4,
         }],
       },
@@ -113,35 +116,48 @@ function DeadlinesTab() {
         plugins: { legend: { display: false } },
         scales: {
           x: { grid: { display: false }, ticks: { color: CHART_TICKS, font: { size: 10 } } },
-          y: { grid: { color: CHART_GRID }, ticks: { color: CHART_TICKS, font: { size: 10 } } },
+          y: {
+            grid: { color: CHART_GRID },
+            ticks: { color: CHART_TICKS, font: { size: 10 }, stepSize: 1, callback: v => (v % 1 === 0 ? v : '') },
+            beginAtZero: true,
+          },
         },
       },
     });
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, []);
+  }, [urgentCount, normalCount]);
 
   return (
     <div style={{ padding: '14px 16px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
-          {/* TODO: Replace with API call when backend is ready
-              GET /api/deadlines → [{ name, tabDate, days, pill }] */}
-          {DEADLINES.map((d, i) => (
-            <div
-              key={d.name}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '6px 0',
-                borderBottom: i < DEADLINES.length - 1 ? '0.5px solid var(--border)' : 'none',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{d.name}</div>
-                <div style={{ fontSize: 10, color: 'var(--faint)' }}>{d.tabDate}</div>
+          {deadlines.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--faint)' }}>No upcoming deadlines</p>
+          ) : (
+            deadlines.slice(0, 5).map((d, i) => (
+              <div
+                key={d.id || d.rfpId + i}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 0',
+                  borderBottom: i < Math.min(deadlines.length, 5) - 1 ? '0.5px solid var(--border)' : 'none',
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>
+                    {d.rfpTitle || d.title}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--faint)' }}>{d.dueDate || d.deadline}</div>
+                </div>
+                <span
+                  className={`pill ${d.urgency === 'urgent' ? 'pill-red' : 'pill-amber'}`}
+                  style={{ fontSize: 10 }}
+                >
+                  {d.urgency === 'urgent' ? 'Urgent' : 'Upcoming'}
+                </span>
               </div>
-              <span className={`pill ${d.pill}`}>{d.days}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
         <div style={{ position: 'relative', height: 160 }}>
           <canvas ref={canvasRef} role="img" aria-label="Deadline chart" />
@@ -151,31 +167,36 @@ function DeadlinesTab() {
   );
 }
 
-// ── Operating Status Tab ──────────────────────────────────────────
-
-// [MODIFIED] Zeroed out — TODO: Replace with API call when backend is ready
-// GET /api/rfps/status-summary → [{ label, pct }]
-const STATUS_LEGEND = [
-  { color: '#4f46e5', label: 'Under review', pct: '0%' },
-  { color: '#1D9E75', label: 'Drafting',     pct: '0%' },
-  { color: '#EF9F27', label: 'Submitted',    pct: '0%' },
-  { color: '#484f58', label: 'Archived',     pct: '0%' },
-];
-
-function OpsStatusTab() {
+// ── Operating Status Tab ───────────────────────────────────────────
+function OpsStatusTab({ statusCounts = {} }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
 
+  const underReview = statusCounts.under_review || 0;
+  const drafting    = statusCounts.draft        || 0;
+  const submitted   = statusCounts.submitted    || 0;
+  const archived    = statusCounts.archived     || 0;
+  const total       = underReview + drafting + submitted + archived || 1;
+
+  const pct = n => `${Math.round(n / total * 100)}%`;
+
+  const legend = [
+    { color: '#4f46e5', label: 'Under review', value: underReview, pct: pct(underReview) },
+    { color: '#1D9E75', label: 'Drafting',     value: drafting,    pct: pct(drafting)    },
+    { color: '#EF9F27', label: 'Submitted',    value: submitted,   pct: pct(submitted)   },
+    { color: '#484f58', label: 'Archived',     value: archived,    pct: pct(archived)    },
+  ];
+
   useEffect(() => {
-    if (!canvasRef.current || chartRef.current) return;
+    if (!canvasRef.current) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
     chartRef.current = new Chart(canvasRef.current, {
       type: 'doughnut',
       data: {
-        labels: ['Under Review', 'Drafting', 'Submitted', 'Archived'],
+        labels: legend.map(l => l.label),
         datasets: [{
-          // [MODIFIED] Zeroed out — TODO: Replace with API call when backend is ready
-          // GET /api/rfps/status-summary → { data: [...] }
-          data: [0, 0, 0, 0],
+          data: [underReview, drafting, submitted, archived],
           backgroundColor: ['#4f46e5', '#1D9E75', '#EF9F27', '#484f58'],
           borderWidth: 0,
         }],
@@ -188,7 +209,7 @@ function OpsStatusTab() {
       },
     });
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, []);
+  }, [underReview, drafting, submitted, archived]);
 
   return (
     <div style={{ padding: '14px 16px' }}>
@@ -197,7 +218,7 @@ function OpsStatusTab() {
           <canvas ref={canvasRef} role="img" aria-label="Status donut" />
         </div>
         <div>
-          {STATUS_LEGEND.map((s) => (
+          {legend.map(s => (
             <div key={s.label} className="leg">
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div className="dot" style={{ background: s.color }} />
@@ -212,35 +233,29 @@ function OpsStatusTab() {
   );
 }
 
-// ── TrackingTabs (container) ──────────────────────────────────────
+// ── Container ──────────────────────────────────────────────────────
 const TABS = [
-  { id: 'pipeline',   label: 'Pipeline Value' },
-  { id: 'deadlines',  label: 'Upcoming Deadlines' },
-  { id: 'opsstatus',  label: 'Operating Status' },
+  { id: 'pipeline',  label: 'Pipeline Value'     },
+  { id: 'deadlines', label: 'Upcoming Deadlines'  },
+  { id: 'opsstatus', label: 'Operating Status'    },
 ];
 
-export default function TrackingTabs() {
+export default function TrackingTabs({ pipelineData = [], topClients = [], deadlines = [], statusCounts = {} }) {
   const [activeTab, setActiveTab] = useState('pipeline');
 
   return (
     <div className="card">
       <div style={{ padding: '14px 16px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-            Tracking
-          </div>
-          
-          {/* Upload RFP button — moved here from Dashboard page header*/}
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Tracking</div>
           <button className="btn-sm btn-p" onClick={() => window.location.href = '/upload-rfp'}>
             <i className="ti ti-plus" style={{ fontSize: 13 }} />
             Upload RFP
           </button>
         </div>
-        
-
 
         <div className="tracking-tabs">
-          {TABS.map((t) => (
+          {TABS.map(t => (
             <button
               key={t.id}
               className={`ttab${activeTab === t.id ? ' active' : ''}`}
@@ -252,9 +267,9 @@ export default function TrackingTabs() {
         </div>
       </div>
 
-      {activeTab === 'pipeline'  && <PipelineTab />}
-      {activeTab === 'deadlines' && <DeadlinesTab />}
-      {activeTab === 'opsstatus' && <OpsStatusTab />}
+      {activeTab === 'pipeline'  && <PipelineTab  pipelineData={pipelineData} topClients={topClients} />}
+      {activeTab === 'deadlines' && <DeadlinesTab deadlines={deadlines} />}
+      {activeTab === 'opsstatus' && <OpsStatusTab statusCounts={statusCounts} />}
     </div>
   );
 }

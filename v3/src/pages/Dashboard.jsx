@@ -1,50 +1,69 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import TopNavbar           from '../components/layout/TopNavbar.jsx';
+import React, { useState } from 'react';
+import TopNavbar        from '../components/layout/TopNavbar.jsx';
 import FilterBar        from '../components/dashboard/FilterBar.jsx';
 import KPISection       from '../components/dashboard/KPISection.jsx';
 import TrackingTabs     from '../components/dashboard/TrackingTabs.jsx';
 import BidDecisionCards from '../components/dashboard/BidDecisionCards.jsx';
 import RightPanel       from '../components/dashboard/RightPanel.jsx';
-
+import { useAsync }     from '../hooks/useAsync.js';
+import { rfpApi, notifApi, deadlineApi } from '../services/api.js';
 import '../styles/dashboard.css';
 
 export default function Dashboard() {
-  const navigate = useNavigate();
+  const [filters, setFilters] = useState({});
 
-  // Clear the active RFP from localStorage when the user navigates to the Dashboard.
-  // This ensures the AI chat panel is no longer scoped to a specific RFP and instead
-  // falls back to Priority 3 (list all available RFPs) in the chat endpoint.
-  useEffect(() => {
-    localStorage.removeItem('rfpilot_active_rfp');
-  }, []);
+  // ── Global data (no filter dependency) ───────────────────────────
+  const statsState    = useAsync(() => rfpApi.getStats().then(r => r.data),         []);
+  const pipelineState = useAsync(() => rfpApi.getPipelineValue().then(r => r.data), []);
+  const clientsState  = useAsync(() => rfpApi.getTopClients().then(r => r.data),    []);
+  const ownersState   = useAsync(() => rfpApi.getOwners().then(r => r.data || []),  []);
+  const notifState    = useAsync(() => notifApi.list().then(r => r.data   || []),   []);
+  const deadlineState = useAsync(() => deadlineApi.list().then(r => r.data || []),  []);
 
+  // ── Filter-dependent: RFPs with decisions (for bid cards) ─────────
+  const filtersKey = JSON.stringify(filters);
+  const decisionRfpsState = useAsync(
+    () => rfpApi.list({ ...filters, has_decision: true }).then(r => r.data || []),
+    [filtersKey]
+  );
+
+  // Build dynamic filter option lists
+  const clientOptions = (clientsState.data || []).map(c => ({ value: c.name, label: c.name }));
+  const ownerOptions  = ownersState.data || [];
 
   return (
     <div className="page">
-
-      {/* ── Top Navigation ── */}
       <TopNavbar />
+      <FilterBar
+        onChange={setFilters}
+        clientOptions={clientOptions}
+        ownerOptions={ownerOptions}
+      />
 
-     {/*removed th page header*/}
-
-      {/* ── Filters ── */}
-      <FilterBar />
-
-      {/* ── Main Body ── */}
       <div className="body">
-
-        {/* Left/Main column */}
         <div className="main">
-          <KPISection />
-          <TrackingTabs />
-          <BidDecisionCards />
+          <KPISection
+            stats={statsState.data || {}}
+            loading={statsState.loading}
+          />
+          <TrackingTabs
+            pipelineData={pipelineState.data || []}
+            topClients={clientsState.data || []}
+            deadlines={deadlineState.data || []}
+            statusCounts={statsState.data || {}}
+          />
+          <BidDecisionCards
+            rfps={decisionRfpsState.data || []}
+            loading={decisionRfpsState.loading}
+          />
         </div>
 
-        {/* Right panel */}
-        <RightPanel onOpenChat={() => {}} />
+        <RightPanel
+          notifications={notifState.data || []}
+          deadlines={deadlineState.data || []}
+          onOpenChat={() => {}}
+        />
       </div>
-
     </div>
   );
 }

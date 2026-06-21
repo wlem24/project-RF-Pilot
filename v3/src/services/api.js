@@ -1,9 +1,6 @@
-// ============================================================
 // All HTTP calls live here. Replace BASE_URL with your backend.
-// ============================================================
 import axios from 'axios';
 
-// 🔌 Set your backend URL in .env as VITE_API_BASE_URL
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const api = axios.create({

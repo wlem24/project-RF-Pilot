@@ -1,95 +1,97 @@
-import { useState } from 'react';
-import {
-  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  Radar, ResponsiveContainer, Tooltip,
-} from 'recharts';
-import { RiCheckLine, RiAlertLine } from 'react-icons/ri';
-import { EmptyState, ProgressRow, StatusBadge } from '../../common/index.jsx';
-import ConfidenceGauge from './ConfidenceGauge.jsx';
-import styles from './DecisionTab.module.css';
+import { useState, useEffect, useCallback } from 'react';
+import { CheckCircle, AlertTriangle, Check, X, GitBranch, BarChart3 } from 'lucide-react';
+import { ProgressBar } from '../../ui/primitives';
+import { rfpApi }     from '../../../services/api.js';
 
-// ── Empty radar data shape ─────────────────────────────────────
-const EMPTY_RADAR = [
-  { subject: 'Technical Fit',       score: 0, fullMark: 100 },
-  { subject: 'Resource Avail.',     score: 0, fullMark: 100 },
-  { subject: 'Profitability',       score: 0, fullMark: 100 },
-  { subject: 'Strategic Alignment', score: 0, fullMark: 100 },
-  { subject: 'Risk',                score: 0, fullMark: 100 },
-];
+// ── Decision Hero ──────────────────────────────────────────────────────────────
 
-// ── Decision Badge (BID / NO-BID) ─────────────────────────────
-function DecisionBadge({ decision }) {
-  if (!decision) {
-    return (
-      <div className={styles.badgeEmpty}>
-        <span className={styles.badgeEmptyText}>—</span>
-        <p className={styles.badgeEmptyLabel}>Awaiting Analysis</p>
-      </div>
-    );
-  }
-  const isBid = decision === 'bid' || decision === 'BID';
+function DecisionHero({ decision, onDecide, saving }) {
+  const config = {
+    BID:     { bg: '#F0FDF4', border: '#BBF7D0', color: '#059669', label: 'Bid'              },
+    'NO BID':{ bg: '#FFF1F2', border: '#FECDD3', color: '#DC2626', label: 'No bid'           },
+    PENDING: { bg: '#F8F9FB', border: '#E5E7EB', color: '#9CA3AF', label: 'Awaiting decision' },
+  };
+  const c = config[decision] || config.PENDING;
+
   return (
-    <div className={`${styles.decisionBadge} ${isBid ? styles.bid : styles.noBid}`}>
-      <div className={styles.decisionPulse} />
-      <div className={styles.decisionInner}>
-        <div className={styles.decisionLiveDot} />
-        <span className={styles.decisionText}>{isBid ? 'BID' : 'NO-BID'}</span>
-        <p className={styles.decisionSub}>Recommendation</p>
-      </div>
-    </div>
-  );
-}
-
-// ── Time & Effort Card ─────────────────────────────────────────
-function TimeEffortCard({ data }) {
-  // 🔌 API hook: data from GET /rfps/{id}/decision
-  const items = [
-    { label: 'Estimated Time',  value: data?.estimatedTime  || null, unit: 'weeks' },
-    { label: 'Estimated Effort',value: data?.estimatedEffort|| null, unit: 'person-months' },
-    { label: 'Resource Demand', value: data?.resourceDemand || null, unit: '' },
-  ];
-  return (
-    <div className={styles.timeCard}>
-      <p className={styles.timeCardTitle}>Time & Effort</p>
-      <div className={styles.timeCardGrid}>
-        {items.map(({ label, value, unit }) => (
-          <div key={label} className={styles.timeItem}>
-            <p className={styles.timeLabel}>{label}</p>
-            <p className={styles.timeValue}>
-              {value != null ? `${value} ${unit}` : <span style={{ color: '#d1d5db' }}>—</span>}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Flags card ─────────────────────────────────────────────────
-function FlagsCard({ title, flags, type }) {
-  const isGreen = type === 'green';
-  return (
-    <div className={`${styles.flagsCard} ${isGreen ? styles.flagsGreen : styles.flagsRed}`}>
-      <div className={styles.flagsHeader}>
-        <div className={`${styles.flagsIconWrap} ${isGreen ? styles.flagsIconGreen : styles.flagsIconRed}`}>
-          {isGreen ? '✅' : '🚩'}
-        </div>
-        <p className={`${styles.flagsTitle} ${isGreen ? styles.flagsTitleGreen : styles.flagsTitleRed}`}>
-          {title}
+    <div style={{ background: c.bg, border: `0.5px solid ${c.border}`, borderRadius: 12, padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div>
+        <p style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', margin: '0 0 4px' }}>
+          Your decision
         </p>
+        <p style={{ fontSize: 28, fontWeight: 500, color: c.color, margin: '0 0 4px' }}>{c.label}</p>
+        <p style={{ fontSize: 13, color: '#9CA3AF', margin: 0 }}>
+          {decision === 'PENDING' ? 'Set your bid decision below' : 'Click to change'}
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          disabled={saving}
+          onClick={() => onDecide('BID')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 20px', borderRadius: 6, fontSize: 13, fontWeight: 500,
+            cursor: saving ? 'wait' : 'pointer', transition: 'all 0.15s',
+            background: decision === 'BID' ? '#059669' : '#F0FDF4',
+            border: `0.5px solid ${decision === 'BID' ? '#059669' : '#BBF7D0'}`,
+            color:  decision === 'BID' ? '#fff' : '#059669',
+          }}
+        >
+          <Check size={14} aria-hidden="true" />
+          Bid
+        </button>
+        <button
+          disabled={saving}
+          onClick={() => onDecide('NO BID')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 16px', borderRadius: 6, fontSize: 13, fontWeight: 500,
+            cursor: saving ? 'wait' : 'pointer', transition: 'all 0.15s',
+            background: decision === 'NO BID' ? '#DC2626' : '#FFF1F2',
+            border: `0.5px solid ${decision === 'NO BID' ? '#DC2626' : '#FECDD3'}`,
+            color:  decision === 'NO BID' ? '#fff' : '#DC2626',
+          }}
+        >
+          <X size={14} aria-hidden="true" />
+          No bid
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Analysis Score Card ────────────────────────────────────────────────────────
+
+function AnalysisCard({ label, score }) {
+  const hasScore = score !== null && score !== undefined;
+  return (
+    <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 16 }}>
+      <p style={{ fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', margin: '0 0 8px' }}>{label}</p>
+      <p style={{ fontSize: 22, fontWeight: 500, color: '#111827', margin: '0 0 10px' }}>
+        {hasScore ? `${Math.round(score)}%` : '—'}
+      </p>
+      <ProgressBar value={hasScore ? score : 0} height={4} />
+    </div>
+  );
+}
+
+// ── Flag List ──────────────────────────────────────────────────────────────────
+
+function FlagList({ flags, icon, title, color, bg, border, emptyText }) {
+  return (
+    <div style={{ background: bg, border: `0.5px solid ${border}`, borderRadius: 12, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        {icon}
+        <span style={{ fontSize: 14, fontWeight: 500, color }}>{title}</span>
       </div>
       {(!flags || flags.length === 0) ? (
-        <p className={styles.flagsEmpty}>
-          {isGreen ? 'No positive flags identified' : 'No risk flags identified'}
-        </p>
+        <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>{emptyText}</p>
       ) : (
-        <ul className={styles.flagsList}>
+        <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none' }}>
           {flags.map((f, i) => (
-            <li key={i} className={styles.flagItem}>
-              <span className={isGreen ? styles.flagBulletGreen : styles.flagBulletRed}>
-                {isGreen ? '›' : '!'}
-              </span>
-              {typeof f === 'string' ? f : f.text}
+            <li key={i} style={{ fontSize: 13, color, marginBottom: 4, display: 'flex', gap: 6 }}>
+              <span style={{ opacity: 0.6 }}>›</span>
+              {typeof f === 'string' ? f : JSON.stringify(f)}
             </li>
           ))}
         </ul>
@@ -98,281 +100,251 @@ function FlagsCard({ title, flags, type }) {
   );
 }
 
-// ── Approval Step ──────────────────────────────────────────────
-function ApprovalStep({ step, index, onUpdate }) {
-  const statusStyle = {
-    won:       { bg: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)', color: '#059669' },
-    approved:  { bg: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.25)', color: '#059669' },
-    in_review: { bg: 'rgba(59,130,246,0.10)', border: '1px solid rgba(59,130,246,0.25)', color: '#2563eb' },
-    pending:   { bg: '#f3f4f6', border: '1px solid #e5e7eb', color: '#9ca3af' },
-    draft:     { bg: '#f3f4f6', border: '1px solid #e5e7eb', color: '#d1d5db' },
-    rejected:  { bg: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)', color: '#dc2626' },
-  };
-  const ss = statusStyle[step.status] || statusStyle.draft;
-  const dotStyle = step.status === 'won' || step.status === 'approved'
-    ? { background: '#10b981', color: '#fff' }
-    : step.status === 'in_review'
-    ? { background: '#6366f1', color: '#fff' }
-    : { background: '#f3f4f6', color: '#9ca3af' };
+// ── Editable Textarea Field ────────────────────────────────────────────────────
 
-  const labels = { won: '✓ Won', approved: '✓ Won', in_review: '● In Progress', pending: '○ Draft', draft: '○ Draft', rejected: '✕ Rejected' };
-
+function SaveableField({ label, value, placeholder, onChange, onSave }) {
   return (
-    <div className={styles.approvalStep}>
-      <div className={styles.stepDot} style={dotStyle}>
-        {step.status === 'won' || step.status === 'approved' ? '✓' : index + 1}
-      </div>
-      <div className={styles.stepInfo}>
-        <p className={styles.stepName}>{step.stage}</p>
-        {step.assignee && <p className={styles.stepAssignee}>{step.assignee}</p>}
-        {step.completedAt && <p className={styles.stepDate}>Completed: {step.completedAt}</p>}
-      </div>
-      <span className={styles.stepBadge} style={{ background: ss.bg, border: ss.border, color: ss.color }}>
-        {labels[step.status] || step.status}
-      </span>
+    <div>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9CA3AF', marginBottom: 6 }}>
+        {label}
+      </label>
+      <textarea
+        value={value}
+        placeholder={placeholder}
+        onChange={e => onChange(e.target.value)}
+        onBlur={onSave}
+        style={{ width: '100%', minHeight: 72, border: '0.5px solid #E5E7EB', borderRadius: 8, padding: '8px 10px', fontSize: 13, resize: 'vertical', outline: 'none', fontFamily: 'inherit', color: '#111827', boxSizing: 'border-box' }}
+      />
     </div>
   );
 }
 
-// ── Main Decision Tab ──────────────────────────────────────────
-export default function DecisionTab({ rfp, onUpdateApproval }) {
-  const [bidChoice, setBidChoice] = useState(null);
+// ── Approval Pipeline ──────────────────────────────────────────────────────────
 
-  // 🔌 API hook: all values from GET /rfps/{id}
-  const bid       = rfp?.bidDecision || {};
-  const risks     = rfp?.risks || [];
-  const resources = rfp?.resources || [];
-  const pipeline  = rfp?.approvalPipeline || [];
-  const draftProg = rfp?.draftProgress || [];
-  const budget    = bid.budgetEstimate || {};
+const STATUS_STYLE = {
+  approved:    { bg: '#F0FDF4', border: '#BBF7D0', color: '#059669', label: 'Approved'    },
+  completed:   { bg: '#F0FDF4', border: '#BBF7D0', color: '#059669', label: 'Completed'   },
+  in_review:   { bg: '#EFF6FF', border: '#BFDBFE', color: '#2563EB', label: 'In Review'   },
+  in_progress: { bg: '#EFF6FF', border: '#BFDBFE', color: '#2563EB', label: 'In Progress' },
+  rejected:    { bg: '#FFF1F2', border: '#FECDD3', color: '#DC2626', label: 'Rejected'    },
+  skipped:     { bg: '#F3F4F6', border: '#E5E7EB', color: '#6B7280', label: 'Skipped'     },
+  pending:     { bg: '#F8F9FB', border: '#E5E7EB', color: '#9CA3AF', label: 'Pending'     },
+};
 
-  const overallPct = draftProg.length > 0
-    ? Math.round(draftProg.reduce((a, d) => a + d.pct, 0) / draftProg.length)
-    : 0;
+const FALLBACK_STEPS = [
+  { id: 's1', stage: 'Initial Review',        status: 'pending', step_order: 1 },
+  { id: 's2', stage: 'Technical Assessment',  status: 'pending', step_order: 2 },
+  { id: 's3', stage: 'Commercial Evaluation', status: 'pending', step_order: 3 },
+  { id: 's4', stage: 'Management Approval',   status: 'pending', step_order: 4 },
+];
 
-  const radarData = (bid.alignmentMatrix?.length > 0)
-    ? bid.alignmentMatrix
-    : EMPTY_RADAR;
+function ApprovalPipeline({ steps = [], onUpdateStep }) {
+  const [updating, setUpdating] = useState(null);
+  const display = steps.length > 0 ? steps : FALLBACK_STEPS;
+
+  async function advance(step) {
+    if (!onUpdateStep) return;
+    const next = step.status === 'pending' ? 'in_review' : step.status === 'in_review' ? 'approved' : null;
+    if (!next) return;
+    setUpdating(step.id);
+    try { await onUpdateStep(step.id, next); }
+    finally { setUpdating(null); }
+  }
 
   return (
-    <div className={styles.root}>
-
-      {/* ══════════════════════════════════════
-          SECTION 1: EXECUTIVE DECISION SUMMARY
-          ══════════════════════════════════════ */}
-      <div className={`${styles.execSection}`}>
-
-        {/* 3-column hero */}
-        <div className={styles.heroGrid}>
-          {/* Decision Badge */}
-          <div className={styles.heroCell}>
-            <p className={styles.heroCellLabel}>AI Recommendation</p>
-            {/* 🔌 API hook: bid.recommendation */}
-            <DecisionBadge decision={bid.recommendation || null} />
-          </div>
-
-          {/* Confidence Gauge */}
-          <div className={styles.heroCell}>
-            <p className={styles.heroCellLabel}>Confidence Score</p>
-            {/* 🔌 API hook: bid.confidenceLevel */}
-            <ConfidenceGauge score={bid.confidenceLevel ?? null} />
-          </div>
-
-          {/* Time & Effort */}
-          <div className={styles.heroCell}>
-            <p className={styles.heroCellLabel}>Time & Effort</p>
-            <TimeEffortCard data={bid.timeEffort} />
-          </div>
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════
-          SECTION 2: FULL DECISION ANALYSIS
-          ══════════════════════════════════════ */}
-      <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionLabel}>Full Decision Analysis</h3>
-        <p className={styles.sectionSub}>Why the AI made this recommendation</p>
-      </div>
-
-      <div className="grid-2" style={{ marginBottom: '1rem' }}>
-        {/* Radar Chart */}
-        <div className="card">
-          <h2 className="card-title">Alignment Matrix</h2>
-          <div className="accent-bar" />
-          <ResponsiveContainer width="100%" height={280}>
-            <RadarChart cx="50%" cy="50%" data={radarData}>
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <PolarRadiusAxis angle={90} domain={[0,100]} tick={{ fill: '#d1d5db', fontSize: 9 }} tickCount={5} />
-              <Tooltip
-                contentStyle={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12 }}
-              />
-              <Radar name="Score" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.18} strokeWidth={2}
-                dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Progress Analysis */}
-        <div className="card">
-          <h2 className="card-title">Progress Analysis</h2>
-          <div className="accent-bar" />
-          {/* 🔌 API hook: bid.progressAnalysis */}
-          {[
-            { label: 'Technical Match',      key: 'technicalMatch'     },
-            { label: 'Commercial Match',     key: 'commercialMatch'    },
-            { label: 'Resource Readiness',   key: 'resourceReadiness'  },
-            { label: 'Strategic Alignment',  key: 'strategicAlignment' },
-            { label: 'Win Probability',      key: 'winProbability'     },
-          ].map(({ label, key }) => (
-            <ProgressRow key={key} label={label} pct={bid.progressAnalysis?.[key] ?? null} />
-          ))}
-        </div>
-      </div>
-
-      {/* Evidence & Insights */}
-      <div className="grid-2" style={{ marginBottom: '1rem' }}>
-        <FlagsCard title="Green Flags" flags={bid.positiveFlags} type="green" />
-        <FlagsCard title="Red Flags"   flags={bid.riskFlags}     type="red"   />
-      </div>
-
-      {/* AI Summary Card */}
-      <div className={`card ${styles.aiSummaryCard}`} style={{ marginBottom: '1rem' }}>
-        <div className={styles.aiSummaryHeader}>
-          <span className={styles.aiSummaryIcon}>🤖</span>
-          <h2 className="card-title" style={{ marginBottom: 0 }}>AI Recommendation Summary</h2>
-        </div>
-        <div className="accent-bar" />
-        {bid.summary ? (
-          <p className={styles.aiSummaryText}>{bid.summary}</p>
-        ) : (
-          <EmptyState compact icon="🧠" title="AI summary not yet generated" description="Summary will appear after bid analysis is complete" />
-        )}
-      </div>
-
-      {/* ══════════════════════════════════════
-          SECTION 3: BID/NO-BID + INFO CARDS
-          ══════════════════════════════════════ */}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h2 className="card-title">Bid / No-Bid Decision</h2>
-        <div className="accent-bar" />
-
-        {/* Toggle */}
-        <div className={styles.bidToggle}>
-          <button
-            className={`${styles.bidBtn} ${bidChoice === 'bid' ? styles.bidActive : ''}`}
-            onClick={() => setBidChoice('bid')}
-          >
-            <RiCheckLine /> BID
-          </button>
-          <button
-            className={`${styles.bidBtn} ${bidChoice === 'nobid' ? styles.nobidActive : ''}`}
-            onClick={() => setBidChoice('nobid')}
-          >
-            ✕ NO BID
-          </button>
-        </div>
-
-        {/* 3 info cards */}
-        <div className="grid-3">
-          {/* Required Resources */}
-          <div className={styles.infoCard}>
-            <p className={styles.infoCardLabel}>Required Resources</p>
-            {(bid.requiredResources?.length > 0) ? (
-              <ul className={styles.infoList}>
-                {bid.requiredResources.map((r, i) => (
-                  <li key={i} className={styles.infoListItem}><span style={{ color: '#6366f1' }}>›</span> {r}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className={styles.infoEmpty}>No resources assigned</p>
-            )}
-            <div className={styles.infoRule} />
-          </div>
-
-          {/* Expected Risks */}
-          <div className={styles.infoCard}>
-            <p className={styles.infoCardLabel}>Expected Risks</p>
-            {risks.length === 0 ? (
-              <p className={styles.infoEmpty}>No risks identified</p>
-            ) : (
-              <table className={styles.riskTable}>
-                <thead><tr><th>Risk</th><th>Severity</th></tr></thead>
-                <tbody>
-                  {risks.map((r) => (
-                    <tr key={r.id}>
-                      <td>{r.risk}</td>
-                      <td className={`${r.severity === 'high' || r.severity === 'critical' ? styles.sevHigh : r.severity === 'medium' ? styles.sevMed : styles.sevLow}`}>
-                        {r.severity}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            <div className={styles.infoRule} />
-          </div>
-
-          {/* Budget Estimate */}
-          <div className={`${styles.infoCard} ${budget.total ? styles.infoCardHighlight : ''}`}>
-            <p className={styles.infoCardLabel}>Budget Estimate</p>
-            {budget.total ? (
-              <>
-                <div className={styles.budgetGrid}>
-                  {[
-                    ['Professional', budget.professionalFees],
-                    ['Infrastructure', budget.infrastructure],
-                    ['Licensing', budget.licensing],
-                    ['Contingency', budget.contingency],
-                  ].map(([label, val]) => (
-                    <div key={label} className={styles.budgetRow}>
-                      <span>{label}</span><span>{val || '—'}</span>
-                    </div>
-                  ))}
+    <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 500, margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <GitBranch size={15} color="#6366F1" aria-hidden="true" />
+        Approval pipeline
+      </h3>
+      <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {display.map((step, i) => {
+          const ss     = STATUS_STYLE[step.status] || STATUS_STYLE.pending;
+          const done   = step.status === 'approved' || step.status === 'completed';
+          const canAdv = onUpdateStep && (step.status === 'pending' || step.status === 'in_review');
+          return (
+            <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', flex: i < display.length - 1 ? 1 : 'none' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 88 }}>
+                <div
+                  onClick={canAdv ? () => advance(step) : undefined}
+                  title={canAdv ? 'Click to advance' : undefined}
+                  style={{
+                    width: 32, height: 32, borderRadius: '50%',
+                    background: ss.bg, border: `0.5px solid ${ss.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 500, color: ss.color,
+                    cursor: canAdv ? 'pointer' : 'default',
+                    opacity: updating === step.id ? 0.4 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
+                >
+                  {done ? <Check size={14} /> : i + 1}
                 </div>
-                <div className={styles.budgetTotal}>
-                  <span>Total</span>
-                  <span style={{ color: '#6366f1', fontWeight: 700 }}>{budget.total}</span>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, color: '#374151', margin: 0 }}>{step.stage}</p>
+                  <span style={{ display: 'inline-flex', marginTop: 4, padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 500, background: ss.bg, color: ss.color, border: `0.5px solid ${ss.border}` }}>
+                    {ss.label}
+                  </span>
                 </div>
-              </>
-            ) : (
-              <p className={styles.infoEmpty}>Initial cost projection for project resources...</p>
-            )}
-            <div className={styles.infoRule} />
-          </div>
-        </div>
-      </div>
-
-      {/* Approval Pipeline */}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h2 className="card-title">Approval Pipeline</h2>
-        <div className="accent-bar" />
-        {pipeline.length === 0
-          ? <EmptyState compact icon="🔄" title="No approval pipeline configured" />
-          : <div>{pipeline.map((step, i) => (
-              <ApprovalStep key={step.id} step={step} index={i} onUpdate={(s) => onUpdateApproval(step.id, s)} />
-            ))}</div>
-        }
-      </div>
-
-      {/* Drafting Progress */}
-      <div className="card">
-        <h2 className="card-title">Drafting Progress Tracker</h2>
-        <div className="accent-bar" />
-        <div className="flex-between mb-4" style={{ marginBottom: '0.75rem' }}>
-          <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>Overall completion</span>
-          <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#6366f1' }}>{overallPct}%</span>
-        </div>
-        <div className="progress-track" style={{ height: 6, marginBottom: '1.25rem' }}>
-          <div className="progress-fill" style={{ width: `${overallPct}%`, height: 6 }} />
-        </div>
-        {draftProg.length === 0
-          ? <EmptyState compact icon="📝" title="No draft sections yet" />
-          : <div className="space-y-3">
-              {draftProg.map((d) => <ProgressRow key={d.section} label={d.section} pct={d.pct} />)}
+              </div>
+              {i < display.length - 1 && (
+                <div style={{ flex: 1, height: 1, borderTop: '1px dashed #E5E7EB', margin: '16px 4px 0' }} />
+              )}
             </div>
-        }
+          );
+        })}
       </div>
+      {onUpdateStep && display.some(s => s.status === 'pending' || s.status === 'in_review') && (
+        <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 12 }}>Click a step circle to advance its status</p>
+      )}
+    </div>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+
+export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }) {
+  const bid = rfp?.bidDecision || {};
+
+  // Decision state (persisted to DB)
+  const [decision, setDecision] = useState('PENDING');
+  const [saving, setSaving]     = useState(false);
+
+  // Editable form fields (auto-saved on blur)
+  const [resources,   setResources]   = useState('');
+  const [risks,       setRisks]       = useState('');
+  const [budget,      setBudget]      = useState('');
+
+  // Initialise from backend data
+  useEffect(() => {
+    if (bid.recommendation) {
+      const map = { bid: 'BID', no_bid: 'NO BID', conditional_bid: 'BID' };
+      setDecision(map[bid.recommendation] || 'PENDING');
+    }
+    setResources(bid.requiredResources || '');
+    setRisks    (bid.expectedRisks     || '');
+    setBudget   (bid.budgetEstimate    || '');
+  }, [rfp?.id, bid.recommendation, bid.requiredResources, bid.expectedRisks, bid.budgetEstimate]);
+
+  async function handleDecision(value) {
+    setDecision(value);
+    if (!rfpId) return;
+    setSaving(true);
+    try { await onDecision?.(value); }
+    finally { setSaving(false); }
+  }
+
+  const saveField = useCallback(async (field, value) => {
+    if (!rfpId) return;
+    try { await rfpApi.updateDecision(rfpId, { [field]: value }); }
+    catch (_) { /* swallow — non-critical autosave */ }
+  }, [rfpId]);
+
+  // Analysis cards — all from AI-generated scores
+  const analysisCards = [
+    { label: 'Technical match',    score: bid.technicalFit        ?? null },
+    { label: 'Commercial match',   score: bid.commercialFit       ?? null },
+    { label: 'Resource readiness', score: bid.resourceReadiness   ?? null },
+    { label: 'Strategic alignment',score: bid.strategicAlignment  ?? null },
+    { label: 'Win probability',    score: bid.winProbability      ?? null },
+    { label: 'Risk level',         score: bid.riskLevel           ?? null },
+  ];
+
+  const hasAnyScore = analysisCards.some(c => c.score !== null);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Hero — user decision */}
+      <DecisionHero decision={decision} onDecide={handleDecision} saving={saving} />
+
+      {/* AI analysis scores */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 8 }}>
+          AI analysis scores
+          {!hasAnyScore && (
+            <span style={{ fontWeight: 400, color: '#9CA3AF', marginLeft: 8 }}>
+              — populated after upload processing
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          {analysisCards.map(c => <AnalysisCard key={c.label} {...c} />)}
+        </div>
+      </div>
+
+      {/* Flags */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <FlagList
+          flags={bid.positiveFlags}
+          icon={<CheckCircle size={16} color="#10B981" aria-hidden="true" />}
+          title="Green flags"
+          color="#065F46"
+          bg="#F0FDF4"
+          border="#BBF7D0"
+          emptyText="No positive flags identified"
+        />
+        <FlagList
+          flags={bid.riskFlags}
+          icon={<AlertTriangle size={16} color="#EF4444" aria-hidden="true" />}
+          title="Red flags"
+          color="#9F1239"
+          bg="#FFF1F2"
+          border="#FECDD3"
+          emptyText="No risk flags identified"
+        />
+      </div>
+
+      {/* Editable form */}
+      <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 16px' }}>Decision notes</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <SaveableField
+            label="Required resources"
+            value={resources}
+            placeholder="Key resources needed for this bid…"
+            onChange={setResources}
+            onSave={() => saveField('required_resources', resources)}
+          />
+          <SaveableField
+            label="Expected risks"
+            value={risks}
+            placeholder="Main risks and mitigation…"
+            onChange={setRisks}
+            onSave={() => saveField('expected_risks', risks)}
+          />
+          <SaveableField
+            label="Budget estimate"
+            value={budget}
+            placeholder="Rough cost range for this project…"
+            onChange={setBudget}
+            onSave={() => saveField('budget_estimate', budget)}
+          />
+        </div>
+      </div>
+
+      {/* Approval pipeline */}
+      <ApprovalPipeline
+        steps={rfp?.approvalPipeline || []}
+        onUpdateStep={onUpdateApproval}
+      />
+
+      {/* Drafting progress */}
+      <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <BarChart3 size={14} color="#6366F1" aria-hidden="true" />
+          Drafting progress tracker
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 13, color: '#6B7280' }}>Overall completion</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#6366F1' }}>0%</span>
+        </div>
+        <div style={{ width: '100%', height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ width: '0%', height: '100%', background: '#6366F1', borderRadius: 4 }} />
+        </div>
+        <p style={{ fontSize: 13, color: '#9CA3AF', marginTop: 12 }}>No draft sections yet</p>
+      </div>
+
     </div>
   );
 }

@@ -1,35 +1,79 @@
 import { useState } from 'react';
-import { EmptyState, ProgressRow } from '../../common/index.jsx';
+import { EmptyState } from '../../common/index.jsx';
+import { useAsync }   from '../../../hooks/useAsync.js';
+import { rfpApi }     from '../../../services/api.js';
 import styles from './TechnicalTab.module.css';
 
-const TAGS = ['Technical', 'Legal', 'Commercial'];
+const CATEGORIES = ['Technical', 'Legal', 'Commercial'];
+const CAT_MAP    = { Technical: 'technical', Legal: 'legal', Commercial: 'commercial' };
 
-// 🔌 API hook: evaluation criteria come from GET /rfps/{id}
-// Each item: { id, criteria, weight }
-function EvalCriteriaSection({ criteria }) {
-  if (!criteria || criteria.length === 0) {
-    return <EmptyState compact icon="⚖️" title="No evaluation criteria defined" />;
-  }
+function SkeletonList() {
   return (
-    <div>
-      {criteria.map((item) => (
-        <ProgressRow key={item.id} label={item.criteria} pct={item.weight} />
+    <div className={styles.reqList}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="skeleton" style={{ height: 14, width: `${60 + i * 10}%`, marginBottom: 10, borderRadius: 4 }} />
       ))}
     </div>
   );
 }
 
-// 🔌 API hook: requirements come from GET /rfps/{id}/requirements?type=technical|legal|commercial
-function RequirementsList({ requirements }) {
-  if (!requirements || requirements.length === 0) {
-    return <EmptyState compact icon="📋" title="No requirements extracted yet" description="Requirements will appear after AI analysis" />;
+function RequirementsList({ items, loading, rfpStatus }) {
+  if (loading) return <SkeletonList />;
+  if (!items || items.length === 0) {
+    const isProcessing = rfpStatus === 'processing';
+    return (
+      <EmptyState
+        compact
+        icon="📋"
+        title={isProcessing ? 'Extracting requirements…' : 'No requirements found in this category'}
+        description={isProcessing ? 'Requirements will appear once AI analysis completes.' : 'Upload a richer RFP document to extract category-specific requirements.'}
+      />
+    );
   }
   return (
     <div className={styles.reqList}>
-      {requirements.map((req, i) => (
-        <div key={i} className="req-row">
+      {items.map(req => (
+        <div key={req.id} className="req-row">
           <span className="req-bullet">›</span>
-          {typeof req === 'string' ? req : req.text}
+          {req.text}
+          {req.isMandatory === false && (
+            <span style={{ marginLeft: 6, fontSize: 10, color: '#9ca3af', fontStyle: 'italic' }}>(optional)</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EvalCriteriaSection({ items, loading, rfpStatus }) {
+  if (loading) return <SkeletonList />;
+  if (!items || items.length === 0) {
+    const isProcessing = rfpStatus === 'processing';
+    return (
+      <EmptyState
+        compact
+        icon="⚖️"
+        title={isProcessing ? 'Extracting evaluation criteria…' : 'No evaluation criteria found'}
+        description={isProcessing ? 'Criteria will appear once AI analysis completes.' : 'No scoring rubric was detected in this document.'}
+      />
+    );
+  }
+  return (
+    <div>
+      {items.map(item => (
+        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{item.criteria}</div>
+            {item.notes && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{item.notes}</div>}
+          </div>
+          {item.weight != null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16, minWidth: 120 }}>
+              <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(item.weight, 100)}%`, height: '100%', background: 'var(--accent)', borderRadius: 3 }} />
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', minWidth: 36 }}>{item.weight}%</span>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -37,48 +81,83 @@ function RequirementsList({ requirements }) {
 }
 
 export default function TechnicalTab({ rfp }) {
-  const [activeTag, setActiveTag] = useState('Technical');
+  const [activeCategory, setActiveCategory] = useState('Technical');
+  const rfpId     = rfp?.id;
+  const rfpStatus = rfp?.status;
 
-  // 🔌 API hook: populated from rfp.technicalAnalysis / legalAnalysis / commercialAnalysis
-  const getReqs = () => {
-    if (!rfp) return [];
-    if (activeTag === 'Technical') return rfp.technicalAnalysis?.requirements || [];
-    if (activeTag === 'Legal')     return rfp.legalAnalysis?.complianceRequirements || [];
-    if (activeTag === 'Commercial')return rfp.commercialAnalysis?.pricingObservations || [];
-    return [];
-  };
+  // Requirements: refetch when category changes
+  const reqState = useAsync(
+    () => rfpId
+      ? rfpApi.getRequirements(rfpId, CAT_MAP[activeCategory]).then(r => r.data || [])
+      : Promise.resolve([]),
+    [rfpId, activeCategory]
+  );
+
+  // Evaluation criteria: fetch once per RFP
+  const criteriaState = useAsync(
+    () => rfpId
+      ? rfpApi.getEvalCriteria(rfpId).then(r => r.data || [])
+      : Promise.resolve([]),
+    [rfpId]
+  );
 
   return (
     <div className="space-y-4">
+
       {/* Key Requirements */}
       <div className="card">
         <h2 className="card-title">Key Requirements</h2>
         <div className="accent-bar" />
 
-        {/* Tag selector */}
         <div className={styles.tagRow}>
-          {TAGS.map((tag) => (
+          {CATEGORIES.map(cat => (
             <button
-              key={tag}
-              className={`tag ${activeTag === tag ? 'active' : ''}`}
-              onClick={() => setActiveTag(tag)}
+              key={cat}
+              className={`tag ${activeCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveCategory(cat)}
             >
-              {tag}
+              {cat}
             </button>
           ))}
         </div>
 
-        {/* Requirements list */}
-        <RequirementsList requirements={getReqs()} />
+        <RequirementsList
+          items={reqState.data}
+          loading={reqState.loading}
+          rfpStatus={rfpStatus}
+        />
+
+        {reqState.error && (
+          <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>
+            Failed to load requirements.{' '}
+            <button onClick={reqState.refetch} style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Evaluation Criteria */}
       <div className="card">
         <h2 className="card-title">Evaluation Criteria</h2>
         <div className="accent-bar" />
-        {/* 🔌 API hook: rfp.evaluationCriteria */}
-        <EvalCriteriaSection criteria={rfp?.evaluationCriteria} />
+
+        <EvalCriteriaSection
+          items={criteriaState.data}
+          loading={criteriaState.loading}
+          rfpStatus={rfpStatus}
+        />
+
+        {criteriaState.error && (
+          <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>
+            Failed to load criteria.{' '}
+            <button onClick={criteriaState.refetch} style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+              Retry
+            </button>
+          </div>
+        )}
       </div>
+
     </div>
   );
 }

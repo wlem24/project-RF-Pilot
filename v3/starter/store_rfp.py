@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import sqlite3
 from pathlib import Path
 
@@ -25,15 +26,22 @@ def init_db() -> None:
             )
             """
         )
+        # Additive migration for existing databases created before structured
+        # overview extraction existed. Safe to run on every startup.
+        try:
+            conn.execute("ALTER TABLE rfps ADD COLUMN information TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
 
 
-def create_rfp(filename: str, notes: str, summary: str, extracted_text: str) -> int:
+def create_rfp(filename: str, notes: str, summary: str, extracted_text: str, information: dict | None = None) -> int:
     created_at = datetime.utcnow().isoformat()
+    information_json = json.dumps(information) if information is not None else None
     with get_connection() as conn:
         cursor = conn.execute(
-            "INSERT INTO rfps (filename, notes, summary, extracted_text, created_at) VALUES (?, ?, ?, ?, ?)",
-            (filename, notes, summary, extracted_text, created_at),
+            "INSERT INTO rfps (filename, notes, summary, extracted_text, created_at, information) VALUES (?, ?, ?, ?, ?, ?)",
+            (filename, notes, summary, extracted_text, created_at, information_json),
         )
         conn.commit()
         return cursor.lastrowid
@@ -44,6 +52,10 @@ def get_rfp_by_id(rfp_id: int) -> dict | None:
         row = conn.execute("SELECT * FROM rfps WHERE id = ?", (rfp_id,)).fetchone()
     if row is None:
         return None
+    try:
+        information = json.loads(row["information"]) if row["information"] else None
+    except (json.JSONDecodeError, TypeError):
+        information = None
     return {
         "id": row["id"],
         "filename": row["filename"],
@@ -51,6 +63,7 @@ def get_rfp_by_id(rfp_id: int) -> dict | None:
         "summary": row["summary"],
         "extracted_text": row["extracted_text"],
         "created_at": row["created_at"],
+        "information": information,
     }
 
 #اضافة علشان يقدر يبحث بداخل العقود

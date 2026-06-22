@@ -4,12 +4,8 @@ import { registerRequest } from '../api/auth';
 import '../styles/register.css';
 
 const ROLES = [
-  'Admin',
-  'Proposal Manager',
-  'Sales Manager',
-  'Business Analyst',
-  'Technical Writer',
-  'Reviewer',
+  { value: 'admin', label: 'Admin' },
+  { value: 'user',  label: 'User'  },
 ];
 
 const FEATURES = [
@@ -20,6 +16,8 @@ const FEATURES = [
 ];
 
 export default function Register() {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -27,32 +25,43 @@ export default function Register() {
     password: '',
     confirmPassword: '',
   });
-  const [showPassword, setShowPassword]     = useState(false);
-  const [showConfirm, setShowConfirm]       = useState(false);
-  const [submitted, setSubmitted]           = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm]   = useState(false);
+  const [submitted, setSubmitted]       = useState(false);
+  const [loading, setLoading]           = useState(false);
 
   const passwordMatch =
     form.password && form.confirmPassword
       ? form.password === form.confirmPassword
       : null;
+  const passwordTooShort = form.password.length > 0 && form.password.length < 8;
 
   const handleChange = (field) => (e) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  // FastAPI/Pydantic returns `detail` as a string for simple HTTPExceptions,
+  // but as an array of { msg, loc, ... } objects for validation errors —
+  // alert()'ing the array directly would just show "[object Object]".
+  const describeError = (err) => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) return detail.map((d) => d.msg).join('\n');
+    return 'Registration failed';
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setSubmitted(true);
-    if (!passwordMatch || !form.role) return;
-    // Send registration to backend. On success, redirect to login.
+    if (!passwordMatch || passwordTooShort || !form.role) return;
+    setLoading(true);
     registerRequest(form.fullName, form.email, form.password, form.role)
       .then(() => {
         alert('Account created successfully. Please sign in.');
         navigate('/login');
       })
-      .catch((err) => alert(err?.response?.data?.detail || 'Registration failed'));
+      .catch((err) => alert(describeError(err)))
+      .finally(() => setLoading(false));
   };
-
-  const navigate = useNavigate();
 
   return (
     <div className="register-page">
@@ -124,7 +133,7 @@ export default function Register() {
                 >
                   <option value="" disabled>Choose your role…</option>
                   {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                    <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </select>
                 <span className="reg-select-arrow">▾</span>
@@ -136,7 +145,7 @@ export default function Register() {
               <label className="reg-label">Password</label>
               <div className="reg-pw-wrapper">
                 <input
-                  className="reg-input"
+                  className={`reg-input${submitted && passwordTooShort ? ' error' : ''}`}
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min. 8 characters"
                   value={form.password}
@@ -152,6 +161,9 @@ export default function Register() {
                   {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
+              {submitted && passwordTooShort && (
+                <p className="reg-validation-msg error">✕ Password must be at least 8 characters.</p>
+              )}
             </div>
 
             {/* Confirm Password */}
@@ -186,8 +198,8 @@ export default function Register() {
             </div>
 
             {/* Submit */}
-            <button type="submit" className="reg-btn">
-              Create account
+            <button type="submit" className="reg-btn" disabled={loading}>
+              {loading ? 'Creating account…' : 'Create account'}
             </button>
 
             {/* Terms */}

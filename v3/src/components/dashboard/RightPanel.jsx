@@ -1,7 +1,25 @@
 import React from 'react';
-import { NOTIFICATIONS, DEADLINES } from '../../data/constants.js';
+import { ArrowUpRightIcon } from '../icons/Icons.jsx';
 
-export default function RightPanel({ onOpenChat }) {
+const TYPE_DOT = {
+  comment:       '#818cf8',
+  approval:      '#1D9E75',
+  status_change: '#EF9F27',
+  system:        '#484f58',
+};
+
+function relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  if (mins < 1)  return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+export default function RightPanel({ notifications = [], deadlines = [], onOpenChat }) {
   return (
     <div className="right-panel">
 
@@ -11,15 +29,19 @@ export default function RightPanel({ onOpenChat }) {
           <i className="ti ti-bell" style={{ fontSize: 13 }} />
           Notifications
         </div>
-        {NOTIFICATIONS.map((n, i) => (
-          <div key={i} className="notif">
-            <div className="ndot" style={{ background: n.dotColor }} />
-            <div>
-              <div className="ntext">{n.text}</div>
-              <div className="ntime">{n.time}</div>
+        {notifications.length === 0 ? (
+          <p style={{ fontSize: 11, color: 'var(--faint)', padding: '4px 0' }}>No notifications</p>
+        ) : (
+          notifications.slice(0, 8).map(n => (
+            <div key={n.id} className="notif">
+              <div className="ndot" style={{ background: TYPE_DOT[n.type] || '#484f58' }} />
+              <div>
+                <div className="ntext">{n.message}</div>
+                <div className="ntime">{relativeTime(n.createdAt)}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* ── Upcoming Deadlines ── */}
@@ -28,15 +50,23 @@ export default function RightPanel({ onOpenChat }) {
           <i className="ti ti-calendar-event" style={{ fontSize: 13 }} />
           Upcoming deadlines
         </div>
-        {DEADLINES.map((d) => (
-          <div key={d.name} className="dl-item">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>{d.name}</div>
-              <div style={{ fontSize: 10, color: 'var(--faint)' }}>{d.date}</div>
+        {deadlines.length === 0 ? (
+          <p style={{ fontSize: 11, color: 'var(--faint)', padding: '4px 0' }}>No deadlines found</p>
+        ) : (
+          deadlines.slice(0, 5).map((d, i) => (
+            <div key={d.id || d.rfpId + i} className="dl-item">
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>
+                  {d.rfpTitle || d.name}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--faint)' }}>{d.dueDate || d.deadline}</div>
+              </div>
+              <span className={`pill ${d.urgency === 'urgent' ? 'pill-red' : 'pill-amber'}`} style={{ fontSize: 10 }}>
+                {d.urgency === 'urgent' ? 'Urgent' : 'Upcoming'}
+              </span>
             </div>
-            <span className={`pill ${d.pill}`}>{d.days}</span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* ── AI Co-Pilot ── */}
@@ -49,12 +79,8 @@ export default function RightPanel({ onOpenChat }) {
         }}>
           <i className="ti ti-robot" style={{ color: '#fff', fontSize: 18 }} />
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f6fc', marginBottom: 4 }}>
-          AI Co-Pilot
-        </div>
-        <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 12 }}>
-          Ask anything about your RFPs
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#f0f6fc', marginBottom: 4 }}>AI Co-Pilot</div>
+        <div style={{ fontSize: 11, color: '#8b949e', marginBottom: 12 }}>Ask anything about your RFPs</div>
         <button
           onClick={onOpenChat}
           style={{
@@ -65,7 +91,7 @@ export default function RightPanel({ onOpenChat }) {
             fontFamily: 'inherit',
           }}
         >
-          Open AI Chat ↗
+          Open AI Chat <ArrowUpRightIcon size={13} color="#fff" style={{ verticalAlign: 'middle', marginLeft: 3 }} />
         </button>
       </div>
 

@@ -1,9 +1,5 @@
-// ============================================================
-// All HTTP calls live here. Replace BASE_URL with your backend.
-// ============================================================
 import axios from 'axios';
 
-// 🔌 Set your backend URL in .env as VITE_API_BASE_URL
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const api = axios.create({
@@ -11,40 +7,91 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// 🔌 Add auth token interceptor here
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('rfpilot_token');
+  const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// ── RFP ──────────────────────────────────────
+// ── RFP ──────────────────────────────────────────────────────────────────────
 export const rfpApi = {
-  getById:       (id)    => api.get(`/rfps/${id}`),
-  upload:        (form)  => api.post('/rfps/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  triggerAnalysis: (id)  => api.post(`/rfps/${id}/analyze`),
-  generateDraft: (id, payload) => api.post(`/rfps/${id}/generate-draft`, payload),
-  updateApproval:(rfpId, stepId, status) => api.patch(`/rfps/${rfpId}/approval/${stepId}`, { status }),
-  exportPdf:     (id)    => api.get(`/rfps/${id}/export-pdf`, { responseType: 'blob' }),
+  /** List RFPs with optional server-side filters */
+  list: (filters = {}) => {
+    const p = new URLSearchParams();
+    if (filters.status         && !['All Statuses', 'all'].includes(filters.status))
+      p.set('status',         filters.status);
+    if (filters.client         && !['All Clients', 'all'].includes(filters.client))
+      p.set('client',         filters.client);
+    if (filters.priority       && !['All Priorities', 'all'].includes(filters.priority))
+      p.set('priority',       filters.priority);
+    if (filters.owner          && !['All Owners', 'all'].includes(filters.owner))
+      p.set('owner',          filters.owner);
+    if (filters.deadline_range && !['Any Date', 'all'].includes(filters.deadline_range))
+      p.set('deadline_range', filters.deadline_range);
+    if (filters.has_decision != null)
+      p.set('has_decision',   filters.has_decision);
+    const qs = p.toString();
+    return api.get(`/rfps/${qs ? '?' + qs : ''}`);
+  },
+
+  getById:          (id)          => api.get(`/rfps/${id}`),
+  upload:           (form, title) => api.post(`/rfps/upload?title=${encodeURIComponent(title)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getStats:         ()            => api.get('/rfps/stats'),
+  getPipelineValue: ()            => api.get('/rfps/pipeline-value'),
+  getTopClients:    ()            => api.get('/rfps/top-clients'),
+  getOwners:        ()            => api.get('/rfps/owners'),
+
+  // Per-RFP sub-resources
+  getRequirements:  (id, cat)    => api.get(`/rfps/${id}/requirements${cat ? '?category=' + cat : ''}`),
+  getEvalCriteria:  (id)         => api.get(`/rfps/${id}/evaluation-criteria`),
+  getWorkflow:      (id)         => api.get(`/rfps/${id}/workflow`),
+  updateWorkflow:   (rfpId, stepId, payload) => api.patch(`/rfps/${rfpId}/workflow/${stepId}`, payload),
+  getNotifications: (id)         => api.get(`/rfps/${id}/notifications`),
+  getDeadlines:     (id)         => api.get(`/rfps/${id}/deadlines`),
+
+  updateStatus:     (id, status)  => api.patch(`/rfps/${id}/status`, { status }),
+  updateDecision:   (id, payload) => api.patch(`/rfps/${id}/decision`, payload),
+  chat:             (rfpId, prompt, sessionId) => api.post('/rfps/chat', { rfp_id: rfpId, session_id: sessionId, question: prompt, top_k: 5 }),
+  getDrafts:        (id)          => api.get(`/rfps/${id}/drafts`),
+  reprocess:        (id)          => api.post(`/rfps/${id}/reprocess`),
+  generateDraft:    (id, payload) => api.post(`/rfps/${id}/generate-draft`, payload),
+  updateApproval:   (rfpId, stepId, status) => api.patch(`/rfps/${rfpId}/workflow/${stepId}`, { status }),
+  exportPdf:        (id)         => api.get(`/rfps/${id}/export-pdf`, { responseType: 'blob' }),
 };
 
-// ── Comments ─────────────────────────────────
+// ── Comments ──────────────────────────────────────────────────────────────────
 export const commentApi = {
-  list:   (rfpId)               => api.get(`/rfps/${rfpId}/comments`),
-  create: (rfpId, message)      => api.post(`/rfps/${rfpId}/comments`, { message }),
-  delete: (rfpId, commentId)    => api.delete(`/rfps/${rfpId}/comments/${commentId}`),
+  list:   (rfpId)                    => api.get(`/rfps/${rfpId}/comments`),
+  create: (rfpId, message, parentId) => api.post(`/rfps/${rfpId}/comments`, { message, parent_id: parentId || null }),
+  delete: (rfpId, commentId)         => api.delete(`/rfps/${rfpId}/comments/${commentId}`),
 };
 
-// ── Notifications ─────────────────────────────
+// ── Notifications ─────────────────────────────────────────────────────────────
 export const notifApi = {
-  list:       ()    => api.get('/notifications'),
-  markRead:   (id)  => api.post(`/notifications/${id}/read`),
+  list:        () => api.get('/notifications/'),
+  markRead:    (id) => api.post(`/notifications/${id}/read`),
   markAllRead: ()   => api.post('/notifications/read-all'),
 };
 
-// ── Deadlines ─────────────────────────────────
+// ── Invitations ───────────────────────────────────────────────────────────────
+export const invitationApi = {
+  list:    ()                       => api.get('/invitations/'),
+  create:  (email, role)            => api.post('/invitations/', { email, role }),
+  revoke:  (id)                     => api.delete(`/invitations/${id}`),
+  preview: (token)                  => api.get(`/invitations/${token}/preview`),
+  accept:  (token, name, password)  => api.post(`/invitations/${token}/accept`, { name, password }),
+};
+
+// ── Team ──────────────────────────────────────────────────────────────────────
+export const teamApi = {
+  listMembers: ()               => api.get('/team/members'),
+  updateRole:  (id, role)       => api.patch(`/team/members/${id}/role`, { role }),
+  removeMember:(id)             => api.delete(`/team/members/${id}`),
+};
+
+// ── Deadlines ─────────────────────────────────────────────────────────────────
 export const deadlineApi = {
-  list: () => api.get('/deadlines'),
+  list: () => api.get('/deadlines/'),
 };
 
 export default api;

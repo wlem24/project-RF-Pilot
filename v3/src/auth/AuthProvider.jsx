@@ -54,4 +54,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext);
-}
+}   
+
+//loading style need to be fixed

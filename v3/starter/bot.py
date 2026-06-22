@@ -1,103 +1,65 @@
-from fastapi import APIRouter, Form, HTTPException
-from dotenv import load_dotenv
-from openai import OpenAI
-from typing import Optional
-import os
 import re
+import uuid
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+from openai import AuthenticationError, RateLimitError, APIConnectionError, OpenAIError
 
-from openai import (
-    RateLimitError,
-    BadRequestError,
-    AuthenticationError,
-    APIConnectionError,
-    APIStatusError,
-    OpenAIError,
-)
+from database import get_db
+from auth_utils import get_current_user
+import models
+import schemas
+import rag_engine
 
-from store_rfp import get_rfp_by_id, get_all_rfps
-
-load_dotenv()
-
-router = APIRouter()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY)
+router = APIRouter(prefix="/rfps", tags=["Chat"])
 
 
-@router.post("/chat")
-async def chat_with_bot(prompt: str = Form(...), rfp_id: Optional[int] = Form(None)):
-    print(f"--- [CHAT LOG] Received Prompt: '{prompt}' | rfp_id: {rfp_id} ---")
-
-    # Priority 1: explicit ID mentioned in the prompt
-    match = re.search(r"\d+", prompt)
-    if match:
-        requested_id = int(match.group(0))
-        print(f"--- [CHAT LOG] Detected ID request in text for ID: {requested_id} ---")
-        rfp = get_rfp_by_id(requested_id)
-
-        if rfp:
-            print(f"--- [CHAT LOG] Found RFP in DB! Loading full text for filename: {rfp['filename']} ---")
-            context = f"Context from Requested RFP #{requested_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text']}\n\n"
-            system_instruction = (
-                "You are an RFP AI assistant and ur name is Michael Scott. The user explicitly requested "
-                "this archived file. Answer their question or summarize the file using this full RFP text."
-            )
-            user_message = f"{context}The user wants to know about this specific file or says: {prompt}"
-        else:
-            print(f"--- [CHAT LOG] RFP with ID {requested_id} NOT FOUND in DB. ---")
-            system_instruction = "You are Michael Scott. Inform the user politely that this specific ID does not exist in the database archives."
-            user_message = prompt
-
-    # Priority 2: use active tab rfp_id if no explicit ID in prompt
-    elif rfp_id is not None:
-        rfp = get_rfp_by_id(rfp_id)
-        if rfp is None:
-            raise HTTPException(status_code=404, detail="RFP not found.")
-
-        context = f"Context from RFP #{rfp_id} (Filename: {rfp['filename']}):\n{rfp['extracted_text']}\n\n"
-        system_instruction = "You are an RFP AI assistant and ur name is Michael Scott. Answer only from the provided RFP context."
-        user_message = f"{context}Please answer the user question using the RFP text above.\nQuestion: {prompt}"
-
-    # Priority 3: no explicit ID and no active rfp_id -> search/browse archive
-    else:
-        try:
-            all_rfps = get_all_rfps()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-        rfps_list_context = "Available archived RFPs in the database:\n"
-        for r in all_rfps:
-            rfps_list_context += f"- ID: {r['id']}, Filename: {r['filename']}, Summary: {r['summary'][:200]}...\n"
-
-        system_instruction = (
-            #اعطيه امثله تفصيليه وقواعد وقوانين لتحسين الرد 
-            "You are an RFP Finder assistant and ur name is Michael Scott. Scan the provided list of archived RFPs. "
-            "If the user asks for a file, show its ID, full Filename, and Summary."
-        )
-        user_message = f"{rfps_list_context}\nUser Query: {prompt}"
-
-    # Send request to OpenAI
+@router.post("/chat", response_model=schemas.ChatResponse)
+def chat_with_bot(
+    body: schemas.ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_message},
-            ],
-            max_tokens=400,
-        )
-        return {"reply": response.choices[0].message.content.strip()}
+        context_rfp_id: uuid.UUID | None = None
 
-    except RateLimitError as e:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
-    except BadRequestError as e:
-        raise HTTPException(status_code=400, detail="Invalid request parameters.")
-    except AuthenticationError as e:
-        raise HTTPException(status_code=401, detail="Authentication failed.")
-    except APIConnectionError as e:
-        raise HTTPException(status_code=502, detail="Failed to connect to OpenAI servers.")
-    except APIStatusError as e:
-        raise HTTPException(status_code=e.status_code, detail="OpenAI error status.")
+        if body.rfp_id:
+            context_rfp_id = body.rfp_id if db.get(models.RFP, body.rfp_id) else None
+        else:
+            match = re.search(
+                r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                body.question, re.IGNORECASE,
+            )
+            if match:
+                try:
+                    candidate = uuid.UUID(match.group(0))
+                    if db.get(models.RFP, candidate):
+                        context_rfp_id = candidate
+                except ValueError:
+                    pass
+
+        row = rag_engine.chat(
+            db             =db,
+            session_id     =body.session_id,
+            user_id        =current_user.id,
+            question       =body.question,
+            context_rfp_id =context_rfp_id,
+            top_k          =body.top_k,
+        )
+        return schemas.ChatResponse(
+            session_id   =row.session_id,
+            answer       =row.ai_response,
+            context_used =row.context_used,
+            prompt_tokens=row.prompt_tokens,
+        )
+
+    except AuthenticationError:
+        raise HTTPException(status_code=502, detail="OpenAI API key is invalid or missing.")
+    except RateLimitError:
+        raise HTTPException(status_code=429, detail="OpenAI rate limit reached.")
+    except APIConnectionError:
+        raise HTTPException(status_code=502, detail="Could not reach OpenAI.")
     except OpenAIError as e:
-        raise HTTPException(status_code=500, detail="Unexpected OpenAI error.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"OpenAI error: {str(e)}")
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="A database error occurred. Please try again.")

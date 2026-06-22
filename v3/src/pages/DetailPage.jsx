@@ -1,106 +1,116 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-// [MODIFIED] Replaced TopNavBar with Navbar — uses useAuth and logout from v3
-import TopNavbar from '../components/layout/TopNavbar.jsx';
-import TabBar from '../components/layout/TabBar.jsx';
-import DraftWorkspace from '../components/layout/DraftWorkspace.jsx';
-import RightSidebar from '../components/sidebar/RightSidebar.jsx';
-import OverviewTab from '../components/detailpage/overview/OverviewTab.jsx';
-import TechnicalTab from '../components/detailpage/technical/TechnicalTab.jsx';
-import DecisionTab from '../components/detailpage/decision/DecisionTab.jsx';
+import TopNavbar        from '../components/layout/TopNavbar.jsx';
+import TabBar           from '../components/layout/TabBar.jsx';
+import DraftWorkspace   from '../components/layout/DraftWorkspace.jsx';
+import RightSidebar     from '../components/sidebar/RightSidebar.jsx';
+import OverviewTab      from '../components/detailpage/overview/OverviewTab.jsx';
+import TechnicalTab     from '../components/detailpage/technical/TechnicalTab.jsx';
+import DecisionTab      from '../components/detailpage/decision/DecisionTab.jsx';
 import CollaborationTab from '../components/detailpage/collaboration/CollaborationTab.jsx';
 import { LoadingSpinner, ErrorMessage } from '../components/common/index.jsx';
-import { useAsync } from '../hooks/useAsync.js';
-import { rfpApi, notifApi } from '../services/api.js';
-
+import { useAsync }     from '../hooks/useAsync.js';
+import { rfpApi }       from '../services/api.js';
 import styles from '../styles/DetailPage.module.css';
 
+const POLL_INTERVAL = 4000;
+
 export default function DetailPage() {
-  const [params]   = useSearchParams();
-  const rfpId      = params.get('id') || undefined;
+  const [params]     = useSearchParams();
+  const rfpId        = params.get('id') || undefined;
   const [tab, setTab]             = useState('overview');
-  // [ADDED] draftOpen state — controls DraftWorkspace visibility
   const [draftOpen, setDraftOpen] = useState(false);
+  const pollRef = useRef(null);
 
-  // ── Data fetching ──────────────────────────────────────────────
-  // 🔌 API hook: GET /rfps/{rfpId} — fetches full RFP detail
   const rfpState = useAsync(
-    
-    () => rfpId ? rfpApi.getById(rfpId).then((r) => {
-      console.log(rfpId, "THIS IS THE ID")
-      r.data
-
-
-
-    }) : Promise.resolve(null),
+    () => rfpId ? rfpApi.getById(rfpId).then(r => r.data) : Promise.resolve(null),
     [rfpId]
   );
+  const rfp = rfpState.data;
 
-  // 🔌 API hook: GET /notifications
-  const notifState = useAsync(() => notifApi.list().then((r) => r.data || []), []);
+  // Auto-poll while processing
+  useEffect(() => {
+    if (rfp?.status === 'processing') {
+      pollRef.current = setInterval(() => rfpState.refetch(), POLL_INTERVAL);
+    } else {
+      clearInterval(pollRef.current);
+    }
+    return () => clearInterval(pollRef.current);
+  }, [rfp?.status]);
 
-  // 🔌 API hook: GET /deadlines
-  // const deadlineState = useAsync(() => deadlineApi.list().then((r) => r.data || []), []);
+  // Sync active RFP for AI Chat
+  useEffect(() => {
+    if (rfp?.id) {
+      localStorage.setItem('rfpilot_active_rfp', JSON.stringify({ id: rfp.id, filename: rfp.title }));
+    }
+  }, [rfp?.id, rfp?.title]);
 
-  const rfp           = rfpState.data;
-  const notifications = notifState.data || [];
-  const deadlines     = []; // 🔌 Replace with deadlineState.data
+  const handleDecision = useCallback(async (decision) => {
+    if (!rfpId) return;
+    await rfpApi.updateDecision(rfpId, { decision });
+    rfpState.refetch();
+  }, [rfpId]);
 
   const handleUpdateApproval = useCallback(async (stepId, status) => {
     if (!rfpId) return;
-    // 🔌 API hook: PATCH /rfps/{rfpId}/approval/{stepId}
-    await rfpApi.updateApprovalStep(rfpId, stepId, status);
+    await rfpApi.updateWorkflow(rfpId, stepId, { status });
     rfpState.refetch();
-  }, [rfpId, rfpState]);
+  }, [rfpId]);
+
+  const handleStatusChange = useCallback(async (status) => {
+    if (!rfpId) return;
+    await rfpApi.updateStatus(rfpId, status);
+    rfpState.refetch();
+  }, [rfpId]);
 
   return (
     <div className={styles.page}>
-      {/* Navigation */}
       <TopNavbar
         rfpId={rfp?.id || rfpId || 'RFP Detail'}
         onGenerateDraft={() => setDraftOpen(true)}
       />
       <TabBar activeTab={tab} onChange={setTab} />
 
-      {/* Main body */}
       <div className={styles.body}>
         <main className={styles.main}>
           <div className={styles.content}>
+            {rfpState.loading && !rfp && <LoadingSpinner message="Loading RFP details…" />}
+            {rfpState.error   && <ErrorMessage message={rfpState.error} onRetry={rfpState.refetch} />}
 
-            {/* Global states */}
-            {rfpState.loading && <LoadingSpinner message="Loading RFP details…" />}
-            {rfpState.error   && (
-              <ErrorMessage message={rfpState.error} onRetry={rfpState.refetch} />
-            )}
-
-            {/* Tab content — shown even without rfp (empty states inside) */}
-            {!rfpState.loading && !rfpState.error && (
+            {!rfpState.error && (
               <>
-                {tab === 'overview'      && <OverviewTab rfp={rfp} />}
+                {rfp?.status === 'processing' && (
+                  <div style={{
+                    background: '#fef9c3', border: '1px solid #fde68a',
+                    borderRadius: 8, padding: '10px 16px', marginBottom: 12,
+                    fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <i className="ti ti-loader" style={{ animation: 'spin 1s linear infinite' }} />
+                    AI is processing this RFP… All tabs will update automatically.
+                  </div>
+                )}
+
+                {tab === 'overview'      && <OverviewTab rfp={rfp} onStatusChange={handleStatusChange} />}
                 {tab === 'technical'     && <TechnicalTab rfp={rfp} />}
                 {tab === 'decision'      && (
-                  <DecisionTab rfp={rfp} onUpdateApproval={handleUpdateApproval} />
-                )}
-                {tab === 'collaboration' && (
-                  <CollaborationTab
+                  <DecisionTab
+                    rfp={rfp}
                     rfpId={rfpId}
-                    comments={rfp?.comments || []}
-                    // 🔌 API hook: onPostComment → POST /rfps/{rfpId}/comments
+                    onDecision={handleDecision}
+                    onUpdateApproval={handleUpdateApproval}
                   />
                 )}
+                {tab === 'collaboration' && <CollaborationTab rfpId={rfpId} />}
               </>
             )}
           </div>
         </main>
 
-        {/* Right sidebar */}
-        <RightSidebar notifications={notifications} deadlines={deadlines} />
+        {/* RightSidebar fetches per-RFP data internally and polls */}
+        <RightSidebar rfpId={rfpId} />
       </div>
 
-      {/* AI Draft Workspace */}
       <DraftWorkspace open={draftOpen} onClose={() => setDraftOpen(false)} rfpId={rfpId} />
-      {/* [REMOVED] AIFab — AIChat is now handled globally by Layout.jsx */}
-
     </div>
   );
 }

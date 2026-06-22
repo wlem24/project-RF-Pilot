@@ -1,20 +1,102 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
+import { rfpApi } from '../../services/api.js';
+
+// Active RFP persists across navigation/refresh — written by UploadRFPPage.jsx
+// (right after upload) and DetailPage.jsx (when an existing RFP is opened).
+const ACTIVE_RFP_KEY = 'rfpilot_active_rfp';
+
+function readActiveRfp() {
+    try {
+        return JSON.parse(localStorage.getItem(ACTIVE_RFP_KEY) || 'null');
+    } catch {
+        return null;
+    }
+}
+
+function greetingFor(rfp) {
+    return rfp
+        ? `I've analyzed the uploaded RFP${rfp.filename ? ` "${rfp.filename}"` : ''}. How can I help you with requirements analysis, compliance checks, summarization, or proposal preparation?`
+        : 'No RFP loaded yet. Upload or open an RFP to get started.';
+}
+
+// Greeting messages are tagged so we can always find-and-replace the single
+// active greeting, regardless of how many times the active RFP has changed
+// before it (uploading a 2nd/3rd RFP, opening a different RFP, etc).
+function greetingMessage(rfp) {
+    return { role: 'ai', text: greetingFor(rfp), isGreeting: true };
+}
 
 export default function AIChat({ isOpen, onToggle }) {
     const [searchParams] = useSearchParams();
-    const rfpId = searchParams.get('id');
-    const [messages, setMessages] = useState([
-        { role: 'ai', text: rfpId ? 'Hello! Ask a question about this RFP.' : 'No RFP selected. Please open an RFP detail page first.' },
-    ]);
+    const location = useLocation();
+    const urlRfpId = searchParams.get('id');
+
+    const [activeRfp, setActiveRfp] = useState(readActiveRfp);
+    const rfpId = urlRfpId || activeRfp?.id || null;
+    // Session ID persists for the lifetime of the browser tab (Fix 1).
+    // sessionStorage survives in-tab navigation but resets on tab close,
+    // which is the correct contract for a single conversation session.
+    const sessionId = useRef((() => {
+        const KEY = 'rfpilot_session_id';
+        let id = sessionStorage.getItem(KEY);
+        if (!id) {
+            id = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            sessionStorage.setItem(KEY, id);
+        }
+        return id;
+    })()).current;
+
+    const [messages, setMessages] = useState(() => [greetingMessage(activeRfp)]);
     const [inputVal, setInputVal] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
 
     // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Focus input whenever the panel opens
+    useEffect(() => {
+        if (isOpen) {
+            // Small delay lets the CSS transition start before focus is applied
+            const t = setTimeout(() => inputRef.current?.focus(), 80);
+            return () => clearTimeout(t);
+        }
+    }, [isOpen]);
+
+    // Re-check the active RFP on every navigation (e.g. right after an upload
+    // navigates to /detail?id=X) and greet the user as soon as it changes.
+    useEffect(() => {
+        const stored = readActiveRfp();
+
+            // If localStorage was cleared (e.g. Dashboard removed the key) but the component
+        // still holds a stale activeRfp in state, reset everything so the chat greets
+        // the user with "No RFP loaded" and sends requests without an rfp_id (Priority 3).
+        if (!stored && activeRfp) {
+            setActiveRfp(null);
+            setMessages([greetingMessage(null)]);
+            return;
+        }
+        const storedId = stored?.id != null ? String(stored.id) : null;
+        const currentId = activeRfp?.id != null ? String(activeRfp.id) : null;
+        if (storedId && storedId !== currentId) {
+            setActiveRfp(stored);
+            // Drop the previous greeting (whatever it was — the initial "no
+            // RFP" placeholder, or a prior RFP's greeting) and append exactly
+            // one fresh greeting for the newly active RFP. Filtering by
+            // `isGreeting` rather than position means this is correct no
+            // matter how many times the active RFP has already changed, and
+            // is naturally idempotent if this effect ever runs twice for the
+            // same transition (e.g. React Strict Mode's double-invoke).
+            setMessages((prev) => [
+                ...prev.filter((m) => !m.isGreeting),
+                greetingMessage(stored),
+            ]);
+        }
+    }, [location, urlRfpId]);
 
 
     // داخل دالة sendMsg في AIChat.jsx
@@ -26,20 +108,14 @@ export default function AIChat({ isOpen, onToggle }) {
         setMessages((prev) => [...prev, { role: 'user', text: val }]);
         setInputVal('');
         setIsLoading(true);
+// Updated from direct fetch (hardcoded port 8001, FormData) to rfpApi.chat().
+// Now sends rfp_id + session_id so the RAG backend can search the right document
+// and remember the conversation history across messages.
 
-        // Allow global archive queries even when no rfpId is present.
-        const formData = new FormData();
-        formData.append('prompt', val);
-        if (rfpId) formData.append('rfp_id', rfpId);
-//---------------------------------------------------------
         try {
-            const response = await fetch('http://127.0.0.1:8000/chat', {
-                method: 'POST',
-                body: formData,
-            });
-
-            const data = await response.json();
-            setMessages((prev) => [...prev, { role: 'ai', text: data.reply }]);
+            const response = await rfpApi.chat(rfpId, val, sessionId);
+            const reply = response.data.answer;
+            setMessages((prev) => [...prev, { role: 'ai', text: reply }]);
         } catch (error) {
             console.error(error);
             setMessages((prev) => [...prev, { role: 'ai', text: 'Unable to fetch a response. Please try again.' }]);
@@ -85,6 +161,7 @@ export default function AIChat({ isOpen, onToggle }) {
 
                 <div className="chat-input-row">
                     <input
+                        ref={inputRef}
                         className="chat-input"
                         placeholder="Type your question..."
                         value={inputVal}

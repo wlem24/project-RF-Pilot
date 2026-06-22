@@ -1,6 +1,7 @@
 // Expandable AI Draft Workspace — slides in from the right when Generate Draft is clicked.
 import { useState } from 'react';
 import { RiCloseLine, RiMagicLine, RiSendPlaneLine } from 'react-icons/ri';
+import { rfpApi } from '../../services/api.js';
 import styles from './DraftWorkspace.module.css';
 
 const DRAFT_TYPES = [
@@ -16,14 +17,28 @@ export default function DraftWorkspace({ open, onClose, rfpId }) {
   const [prompt, setPrompt]           = useState('');
   const [generatedContent, setGenerated] = useState('');
   const [generating, setGenerating]   = useState(false);
+  const [error, setError]             = useState(null);
 
   const handleGenerate = async () => {
+    if (!rfpId) {
+      setError('Open an RFP first — a draft needs RFP content to work from.');
+      return;
+    }
+    if (generating) return; // guard against rapid repeated clicks/Enter
+
     setGenerating(true);
+    setError(null);
     setGenerated('');
-    // 🔌 API hook: POST /rfps/{rfpId}/generate-draft { draftType, prompt }
-    // const res = await rfpApi.generateDraft(rfpId, { draftType, prompt });
-    // setGenerated(res.data.content);
-    setTimeout(() => setGenerating(false), 1200); // UI simulation only
+
+    try {
+      const res = await rfpApi.generateDraft(rfpId, { draftType, prompt });
+      setGenerated(res.data.content);
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : 'Failed to generate draft. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   if (!open) return null;
@@ -81,6 +96,12 @@ export default function DraftWorkspace({ open, onClose, rfpId }) {
             <RiSendPlaneLine />
             {generating ? 'Generating…' : 'Generate Draft'}
           </button>
+
+          {error && (
+            <div className={styles.field} style={{ color: '#dc2626', fontSize: 13, marginBottom: '1rem' }}>
+              {error}
+            </div>
+          )}
 
           {/* Generated Content Area */}
           <div className={styles.field}>

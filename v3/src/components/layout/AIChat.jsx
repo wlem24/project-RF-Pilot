@@ -71,15 +71,6 @@ export default function AIChat({ isOpen, onToggle }) {
     // navigates to /detail?id=X) and greet the user as soon as it changes.
     useEffect(() => {
         const stored = readActiveRfp();
-
-            // If localStorage was cleared (e.g. Dashboard removed the key) but the component
-        // still holds a stale activeRfp in state, reset everything so the chat greets
-        // the user with "No RFP loaded" and sends requests without an rfp_id (Priority 3).
-        if (!stored && activeRfp) {
-            setActiveRfp(null);
-            setMessages([greetingMessage(null)]);
-            return;
-        }
         const storedId = stored?.id != null ? String(stored.id) : null;
         const currentId = activeRfp?.id != null ? String(activeRfp.id) : null;
         if (storedId && storedId !== currentId) {
@@ -108,9 +99,6 @@ export default function AIChat({ isOpen, onToggle }) {
         setMessages((prev) => [...prev, { role: 'user', text: val }]);
         setInputVal('');
         setIsLoading(true);
-// Updated from direct fetch (hardcoded port 8001, FormData) to rfpApi.chat().
-// Now sends rfp_id + session_id so the RAG backend can search the right document
-// and remember the conversation history across messages.
 
         try {
             const response = await rfpApi.chat(rfpId, val, sessionId);

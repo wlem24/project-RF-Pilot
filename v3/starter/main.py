@@ -10,6 +10,7 @@ from rfp_routes import router as rfp_router
 from notification_routes import notif_router, deadline_router
 from invitation_routes import router as invitation_router
 from team_routes import router as team_router
+from dashboard_routes import router as dashboard_router
 
 app = FastAPI(title="RFP AI Assistant API")
 
@@ -33,6 +34,7 @@ app.include_router(notif_router)
 app.include_router(deadline_router)
 app.include_router(invitation_router)
 app.include_router(team_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")

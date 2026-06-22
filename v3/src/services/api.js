@@ -95,4 +95,23 @@ export const deadlineApi = {
   list: () => api.get('/deadlines/'),
 };
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+export const dashboardApi = {
+  getAnalytics: (filters = {}) => {
+    const p = new URLSearchParams();
+    if (filters.status         && !['All Statuses', 'all'].includes(filters.status))
+      p.set('status',         filters.status);
+    if (filters.client         && !['All Clients', 'all'].includes(filters.client))
+      p.set('client',         filters.client);
+    if (filters.priority       && !['All Priorities', 'all'].includes(filters.priority))
+      p.set('priority',       filters.priority);
+    if (filters.owner          && !['All Owners', 'all'].includes(filters.owner))
+      p.set('owner',          filters.owner);
+    if (filters.deadline_range && !['Any Date', 'all'].includes(filters.deadline_range))
+      p.set('deadline_range', filters.deadline_range);
+    const qs = p.toString();
+    return api.get(`/dashboard/analytics${qs ? '?' + qs : ''}`);
+  },
+};
+
 export default api;

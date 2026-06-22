@@ -6,7 +6,7 @@ import TrackingTabs     from '../components/dashboard/TrackingTabs.jsx';
 import BidDecisionCards from '../components/dashboard/BidDecisionCards.jsx';
 import RightPanel       from '../components/dashboard/RightPanel.jsx';
 import { useAsync }     from '../hooks/useAsync.js';
-import { rfpApi, notifApi, deadlineApi } from '../services/api.js';
+import { dashboardApi } from '../services/api.js';
 import { useChat }      from '../context/ChatContext.jsx';
 import '../styles/dashboard.css';
 
@@ -14,24 +14,29 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({});
   const { openChat } = useChat();
 
-  // ── Global data (no filter dependency) ───────────────────────────
-  const statsState    = useAsync(() => rfpApi.getStats().then(r => r.data),         []);
-  const pipelineState = useAsync(() => rfpApi.getPipelineValue().then(r => r.data), []);
-  const clientsState  = useAsync(() => rfpApi.getTopClients().then(r => r.data),    []);
-  const ownersState   = useAsync(() => rfpApi.getOwners().then(r => r.data || []),  []);
-  const notifState    = useAsync(() => notifApi.list().then(r => r.data   || []),   []);
-  const deadlineState = useAsync(() => deadlineApi.list().then(r => r.data || []),  []);
-
-  // ── Filter-dependent: RFPs with decisions (for bid cards) ─────────
+  // Single unified call — all dashboard data, all filters applied server-side.
+  // Replaces the previous 7 separate API calls.
   const filtersKey = JSON.stringify(filters);
-  const decisionRfpsState = useAsync(
-    () => rfpApi.list({ ...filters, has_decision: true }).then(r => r.data || []),
+  const analyticsState = useAsync(
+    () => dashboardApi.getAnalytics(filters).then(r => r.data),
     [filtersKey]
   );
 
-  // Build dynamic filter option lists
-  const clientOptions = (clientsState.data || []).map(c => ({ value: c.name, label: c.name }));
-  const ownerOptions  = ownersState.data || [];
+  const data    = analyticsState.data || {};
+  const loading = analyticsState.loading;
+
+  // Map the unified response to each component's expected props
+  const stats        = data.stats        || {};
+  const pipelineData = data.pipeline_value|| [];
+  const topClients   = data.top_clients  || [];
+  const owners       = data.owners       || [];
+  const notifications= data.notifications|| [];
+  const deadlines    = data.deadlines    || [];
+  const decisionRfps = data.decision_rfps|| [];
+
+  // Build filter dropdown option lists from the unified response
+  const clientOptions = topClients.map(c => ({ value: c.name, label: c.name }));
+  const ownerOptions  = owners;
 
   return (
     <div className="page">
@@ -45,24 +50,24 @@ export default function Dashboard() {
       <div className="body">
         <div className="main">
           <KPISection
-            stats={statsState.data || {}}
-            loading={statsState.loading}
+            stats={stats}
+            loading={loading && !data.stats}
           />
           <TrackingTabs
-            pipelineData={pipelineState.data || []}
-            topClients={clientsState.data || []}
-            deadlines={deadlineState.data || []}
-            statusCounts={statsState.data || {}}
+            pipelineData={pipelineData}
+            topClients={topClients}
+            deadlines={deadlines}
+            statusCounts={stats}
           />
           <BidDecisionCards
-            rfps={decisionRfpsState.data || []}
-            loading={decisionRfpsState.loading}
+            rfps={decisionRfps}
+            loading={loading && !data.decision_rfps}
           />
         </div>
 
         <RightPanel
-          notifications={notifState.data || []}
-          deadlines={deadlineState.data || []}
+          notifications={notifications}
+          deadlines={deadlines}
           onOpenChat={openChat}
         />
       </div>

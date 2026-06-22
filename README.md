@@ -67,6 +67,9 @@ AI-extracted structured fields: title, organization, project overview, scope, su
 - **Editable fields** — Required Resources, Expected Risks, Budget Estimate — auto-save on blur.
 - **Approval pipeline** — real `ApprovalStep` records; click a circle to advance `pending → in_review → approved`. When all 4 steps reach `approved`, the RFP status automatically advances to `submitted` and a notification is dispatched.
 - **Drafting Progress Tracker** — `GET /rfps/:id/drafts` returns per-section completion (5 expected sections). Each section shows "Generated · v{N}" once a draft exists. Overall completion % is calculated live. Draft content is persisted to `draft_documents` + `draft_versions` on each generation.
+- **RFP Outcome** — "Mark as Won / Lost" buttons appear once a bid decision is confirmed or the RFP reaches `submitted` status. Calls `PATCH /rfps/:id/status` with `won` or `lost`; clicking the active button resets to `submitted`. This directly drives the **Win Rate** KPI on the dashboard (formula: `won / (won + lost) * 100`).
+
+> **Win Rate root cause (fixed):** The backend formula and frontend display were always correct. The metric showed 0% because no UI existed to set `status = 'won'` or `'lost'` — both were already valid constraint values. The Outcome section in the Decision tab is the fix.
 
 #### Collaboration Tab
 Comment thread with nested replies (`GET/POST /rfps/:id/comments`). Posts persist to the database and re-render without a page reload. `@mention` autocomplete in the UI.

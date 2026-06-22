@@ -98,6 +98,7 @@ export default function DetailPage() {
                     rfpId={rfpId}
                     onDecision={handleDecision}
                     onUpdateApproval={handleUpdateApproval}
+                    onStatusChange={handleStatusChange}
                   />
                 )}
                 {tab === 'collaboration' && <CollaborationTab rfpId={rfpId} />}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, AlertTriangle, Check, X, GitBranch, BarChart3 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Check, X, GitBranch, BarChart3, Award } from 'lucide-react';
 import { ProgressBar } from '../../ui/primitives';
 import { rfpApi }     from '../../../services/api.js';
 
@@ -211,12 +211,15 @@ const ALL_DRAFT_SECTIONS = [
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }) {
+export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval, onStatusChange }) {
   const bid = rfp?.bidDecision || {};
 
   // Decision state (persisted to DB)
   const [decision, setDecision] = useState('PENDING');
   const [saving, setSaving]     = useState(false);
+
+  // Outcome state (won / lost / null)
+  const [savingOutcome, setSavingOutcome] = useState(false);
 
   // Editable form fields (auto-saved on blur)
   const [resources,   setResources]   = useState('');
@@ -258,6 +261,15 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }
     try { await rfpApi.updateDecision(rfpId, { [field]: value }); }
     catch (_) { /* swallow — non-critical autosave */ }
   }, [rfpId]);
+
+  async function handleOutcome(newStatus) {
+    if (!rfpId || !onStatusChange || savingOutcome) return;
+    // Toggle: clicking the active outcome resets to 'submitted'
+    const target = rfp?.status === newStatus ? 'submitted' : newStatus;
+    setSavingOutcome(true);
+    try { await onStatusChange(target); }
+    finally { setSavingOutcome(false); }
+  }
 
   // Analysis cards — all from AI-generated scores
   const analysisCards = [
@@ -347,6 +359,60 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }
         steps={rfp?.approvalPipeline || []}
         onUpdateStep={onUpdateApproval}
       />
+
+      {/* RFP Outcome — only when a bid was made */}
+      {(decision === 'BID' || rfp?.status === 'won' || rfp?.status === 'lost' || rfp?.status === 'submitted') && (
+        <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Award size={14} color="#6366F1" aria-hidden="true" />
+            RFP Outcome
+          </h3>
+          <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 14px' }}>
+            Was this RFP awarded to your organisation? This updates the Win Rate on the dashboard.
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {/* Won */}
+            <button
+              onClick={() => handleOutcome('won')}
+              disabled={savingOutcome}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                cursor: savingOutcome ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                transition: 'all 0.15s',
+                background: rfp?.status === 'won' ? '#059669' : '#F0FDF4',
+                border: `0.5px solid ${rfp?.status === 'won' ? '#059669' : '#BBF7D0'}`,
+                color:  rfp?.status === 'won' ? '#fff' : '#059669',
+              }}
+            >
+              <CheckCircle size={14} aria-hidden="true" />
+              {rfp?.status === 'won' ? 'Awarded (Won)' : 'Mark as Won'}
+            </button>
+            {/* Lost */}
+            <button
+              onClick={() => handleOutcome('lost')}
+              disabled={savingOutcome}
+              style={{
+                flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                cursor: savingOutcome ? 'wait' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                transition: 'all 0.15s',
+                background: rfp?.status === 'lost' ? '#DC2626' : '#FFF1F2',
+                border: `0.5px solid ${rfp?.status === 'lost' ? '#DC2626' : '#FECDD3'}`,
+                color:  rfp?.status === 'lost' ? '#fff' : '#DC2626',
+              }}
+            >
+              <X size={14} aria-hidden="true" />
+              {rfp?.status === 'lost' ? 'Not Awarded (Lost)' : 'Mark as Lost'}
+            </button>
+          </div>
+          {(rfp?.status === 'won' || rfp?.status === 'lost') && (
+            <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 10, textAlign: 'center' }}>
+              Click the active button again to reset outcome to Submitted
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Drafting progress */}
       <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>

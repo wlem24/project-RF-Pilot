@@ -49,8 +49,10 @@ export const rfpApi = {
   getNotifications: (id)         => api.get(`/rfps/${id}/notifications`),
   getDeadlines:     (id)         => api.get(`/rfps/${id}/deadlines`),
 
+  updateStatus:     (id, status)  => api.patch(`/rfps/${id}/status`, { status }),
   updateDecision:   (id, payload) => api.patch(`/rfps/${id}/decision`, payload),
   chat:             (rfpId, prompt, sessionId) => api.post('/rfps/chat', { rfp_id: rfpId, session_id: sessionId, question: prompt, top_k: 5 }),
+  getDrafts:        (id)          => api.get(`/rfps/${id}/drafts`),
   generateDraft:    (id, payload) => api.post(`/rfps/${id}/generate-draft`, payload),
   updateApproval:   (rfpId, stepId, status) => api.patch(`/rfps/${rfpId}/workflow/${stepId}`, { status }),
   exportPdf:        (id)         => api.get(`/rfps/${id}/export-pdf`, { responseType: 'blob' }),

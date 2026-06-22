@@ -201,6 +201,14 @@ function ApprovalPipeline({ steps = [], onUpdateStep }) {
   );
 }
 
+const ALL_DRAFT_SECTIONS = [
+  { key: 'executive_summary', label: 'Executive Summary'  },
+  { key: 'technical',         label: 'Technical Proposal' },
+  { key: 'commercial',        label: 'Commercial Proposal'},
+  { key: 'compliance',        label: 'Compliance Response'},
+  { key: 'full',              label: 'Full Proposal'      },
+];
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }) {
@@ -215,6 +223,9 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }
   const [risks,       setRisks]       = useState('');
   const [budget,      setBudget]      = useState('');
 
+  // Drafting progress
+  const [draftData, setDraftData] = useState({ drafts: [], completion_percentage: 0 });
+
   // Initialise from backend data
   useEffect(() => {
     if (bid.recommendation) {
@@ -225,6 +236,14 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }
     setRisks    (bid.expectedRisks     || '');
     setBudget   (bid.budgetEstimate    || '');
   }, [rfp?.id, bid.recommendation, bid.requiredResources, bid.expectedRisks, bid.budgetEstimate]);
+
+  // Fetch draft progress whenever rfpId changes
+  useEffect(() => {
+    if (!rfpId) return;
+    rfpApi.getDrafts(rfpId)
+      .then(r => setDraftData(r.data))
+      .catch(() => {});
+  }, [rfpId]);
 
   async function handleDecision(value) {
     setDecision(value);
@@ -337,12 +356,33 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval }
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <span style={{ fontSize: 13, color: '#6B7280' }}>Overall completion</span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#6366F1' }}>0%</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#6366F1' }}>{draftData.completion_percentage}%</span>
         </div>
-        <div style={{ width: '100%', height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ width: '0%', height: '100%', background: '#6366F1', borderRadius: 4 }} />
+        <div style={{ width: '100%', height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+          <div style={{ width: `${draftData.completion_percentage}%`, height: '100%', background: '#6366F1', borderRadius: 4, transition: 'width 0.3s' }} />
         </div>
-        <p style={{ fontSize: 13, color: '#9CA3AF', marginTop: 12 }}>No draft sections yet</p>
+        {ALL_DRAFT_SECTIONS.map(section => {
+          const generated = draftData.drafts.find(d => d.draft_type === section.key);
+          return (
+            <div key={section.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '0.5px solid #F3F4F6' }}>
+              <span style={{ fontSize: 13, color: '#374151' }}>{section.label}</span>
+              {generated ? (
+                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 10px', borderRadius: 20, background: '#F0FDF4', color: '#059669', border: '0.5px solid #BBF7D0' }}>
+                  Generated · v{generated.version_number}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 10px', borderRadius: 20, background: '#F8F9FB', color: '#9CA3AF', border: '0.5px solid #E5E7EB' }}>
+                  Not started
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {draftData.drafts.length === 0 && (
+          <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10 }}>
+            Use the Generate Draft button to create proposal sections
+          </p>
+        )}
       </div>
 
     </div>

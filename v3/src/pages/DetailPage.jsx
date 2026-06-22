@@ -57,6 +57,12 @@ export default function DetailPage() {
     rfpState.refetch();
   }, [rfpId]);
 
+  const handleStatusChange = useCallback(async (status) => {
+    if (!rfpId) return;
+    await rfpApi.updateStatus(rfpId, status);
+    rfpState.refetch();
+  }, [rfpId]);
+
   return (
     <div className={styles.page}>
       <TopNavbar
@@ -84,7 +90,7 @@ export default function DetailPage() {
                   </div>
                 )}
 
-                {tab === 'overview'      && <OverviewTab rfp={rfp} />}
+                {tab === 'overview'      && <OverviewTab rfp={rfp} onStatusChange={handleStatusChange} />}
                 {tab === 'technical'     && <TechnicalTab rfp={rfp} />}
                 {tab === 'decision'      && (
                   <DecisionTab

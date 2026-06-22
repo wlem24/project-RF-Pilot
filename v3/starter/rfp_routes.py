@@ -32,6 +32,20 @@ OVERVIEW_FIELDS = [
     "evaluationCriteria", "keyDeliverables", "risks",
 ]
 
+DRAFT_TYPE_MAP = {
+    "executive summary": "executive_summary",
+    "technical proposal": "technical",
+    "commercial proposal": "commercial",
+    "compliance response": "compliance",
+    "full proposal": "full",
+    "executive_summary": "executive_summary",
+    "technical": "technical",
+    "commercial": "commercial",
+    "compliance": "compliance",
+    "full": "full",
+}
+TOTAL_DRAFT_SECTIONS = 5
+
 DEFAULT_WORKFLOW = [
     ("Initial Review",         1),
     ("Technical Assessment",   2),
@@ -604,6 +618,41 @@ def get_rfp(
 
 
 # ─────────────────────────────────────────────
+#  Status Update
+# ─────────────────────────────────────────────
+
+VALID_STATUSES = {'draft', 'under_review', 'bid_decision', 'submitted', 'won', 'lost', 'no_bid'}
+
+@router.patch("/{rfp_id}/status")
+def update_rfp_status(
+    rfp_id: uuid.UUID,
+    body:   dict,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    rfp = db.get(models.RFP, rfp_id)
+    if not rfp:
+        raise HTTPException(status_code=404, detail="RFP not found.")
+    new_status = (body.get("status") or "").strip()
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid status. Valid values: {', '.join(sorted(VALID_STATUSES))}",
+        )
+    old_status = rfp.status
+    rfp.status = new_status
+    if old_status != new_status:
+        db.add(models.Notification(
+            user_id=current_user.id,
+            rfp_id =rfp_id,
+            type   ="status_change",
+            message=f'"{rfp.title}" status changed to {new_status.replace("_", " ").title()}',
+        ))
+    db.commit()
+    return {"rfp_id": str(rfp_id), "status": rfp.status}
+
+
+# ─────────────────────────────────────────────
 #  Requirements (by category)
 # ─────────────────────────────────────────────
 
@@ -717,6 +766,21 @@ def update_workflow_step(
         step.notes = body["notes"]
 
     db.commit()
+
+    # Auto-submit: when every step is approved/completed, advance RFP to "submitted"
+    all_steps = db.query(models.ApprovalStep).filter_by(rfp_id=rfp_id).all()
+    if all_steps and all(s.status in ("approved", "completed") for s in all_steps):
+        rfp_obj = db.get(models.RFP, rfp_id)
+        if rfp_obj and rfp_obj.status not in ("won", "lost", "no_bid", "submitted"):
+            rfp_obj.status = "submitted"
+            db.add(models.Notification(
+                user_id=current_user.id,
+                rfp_id =rfp_id,
+                type   ="status_change",
+                message=f'"{rfp_obj.title}" completed all approval steps and moved to Submitted.',
+            ))
+            db.commit()
+
     return {
         "id"         : str(step.id),
         "stage"      : step.stage,
@@ -829,13 +893,97 @@ async def generate_draft(
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user_msg}],
             max_tokens=900,
         )
-        return {"content": res.choices[0].message.content.strip(), "draftType": payload.draftType}
+        content_text = res.choices[0].message.content.strip()
+
+        # Persist the generated draft to draft_documents / draft_versions
+        draft_type_db = DRAFT_TYPE_MAP.get(payload.draftType.lower().strip())
+        if draft_type_db:
+            draft_doc = db.query(models.DraftDocument).filter_by(rfp_id=rfp_id, draft_type=draft_type_db).first()
+            if not draft_doc:
+                draft_doc = models.DraftDocument(
+                    rfp_id      =rfp_id,
+                    generated_by=current_user.id,
+                    draft_type  =draft_type_db,
+                    prompt      =(payload.prompt or "").strip() or None,
+                    content     =content_text,
+                )
+                db.add(draft_doc)
+                db.flush()
+                version_num = 1
+            else:
+                draft_doc.content = content_text
+                db.flush()
+                last_ver = (
+                    db.query(models.DraftVersion)
+                    .filter_by(draft_document_id=draft_doc.id)
+                    .order_by(models.DraftVersion.version_number.desc())
+                    .first()
+                )
+                version_num = (last_ver.version_number + 1) if last_ver else 1
+
+            db.add(models.DraftVersion(
+                draft_document_id=draft_doc.id,
+                version_number   =version_num,
+                content          =content_text,
+                prompt           =(payload.prompt or "").strip() or None,
+                generated_by     =current_user.id,
+            ))
+            db.commit()
+
+        return {"content": content_text, "draftType": payload.draftType}
     except RateLimitError:
         raise HTTPException(status_code=429, detail="Rate limit exceeded.")
     except AuthenticationError:
         raise HTTPException(status_code=401, detail="AI service authentication failed.")
     except (APIConnectionError, APIStatusError, OpenAIError, BadRequestError) as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {str(e)}")
+
+
+# ─────────────────────────────────────────────
+#  Draft Documents
+# ─────────────────────────────────────────────
+
+_DRAFT_LABELS = {
+    "executive_summary": "Executive Summary",
+    "technical":         "Technical Proposal",
+    "commercial":        "Commercial Proposal",
+    "compliance":        "Compliance Response",
+    "full":              "Full Proposal",
+}
+
+@router.get("/{rfp_id}/drafts")
+def get_drafts(
+    rfp_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if not db.get(models.RFP, rfp_id):
+        raise HTTPException(status_code=404, detail="RFP not found.")
+    docs = (
+        db.query(models.DraftDocument)
+        .filter_by(rfp_id=rfp_id)
+        .all()
+    )
+    result = []
+    for d in docs:
+        latest = (
+            db.query(models.DraftVersion)
+            .filter_by(draft_document_id=d.id)
+            .order_by(models.DraftVersion.version_number.desc())
+            .first()
+        )
+        result.append({
+            "id"            : str(d.id),
+            "draft_type"    : d.draft_type,
+            "label"         : _DRAFT_LABELS.get(d.draft_type, d.draft_type or "Draft"),
+            "version_number": latest.version_number if latest else 1,
+            "created_at"    : latest.created_at.isoformat() if latest and latest.created_at else None,
+        })
+    return {
+        "drafts"               : result,
+        "completion_percentage": round(len(result) / TOTAL_DRAFT_SECTIONS * 100),
+        "total_sections"       : TOTAL_DRAFT_SECTIONS,
+    }
 
 
 # ─────────────────────────────────────────────

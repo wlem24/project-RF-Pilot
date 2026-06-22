@@ -1,4 +1,15 @@
+import { useState } from 'react';
 import { InfoRow, StatusBadge, EmptyState } from '../../common/index.jsx';
+
+const STATUS_OPTIONS = [
+  { value: 'draft',        label: 'Draft'        },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'bid_decision', label: 'Bid Decision' },
+  { value: 'submitted',    label: 'Submitted'    },
+  { value: 'won',          label: 'Won'          },
+  { value: 'lost',         label: 'Lost'         },
+  { value: 'no_bid',       label: 'No Bid'       },
+];
 
 // AI-extracted fields are usually plain strings, but the model can sometimes
 // nest an object (e.g. importantDates: {questionsDue, preBidMeeting}) or an
@@ -37,11 +48,16 @@ function TextBlock({ label, value }) {
   );
 }
 
-export default function OverviewTab({ rfp }) {
-  // 🔌 API hook: rfp.information comes from GET /rfps/{id}, extracted once
-  // during upload (same OpenAI call that produces the summary).
+export default function OverviewTab({ rfp, onStatusChange }) {
+  const [saving, setSaving] = useState(false);
   const info = rfp?.information || {};
   const hasAnyInfo = Object.values(info).some((v) => formatValue(v) != null);
+
+  async function handleStatusSelect(e) {
+    setSaving(true);
+    try { await onStatusChange(e.target.value); }
+    finally { setSaving(false); }
+  }
 
   return (
     <div className="card">
@@ -60,7 +76,32 @@ export default function OverviewTab({ rfp }) {
           <InfoRow label="RFP Title"             value={formatValue(info.title)} />
           <InfoRow label="Organization / Issuer" value={formatValue(info.organization)} />
           <InfoRow label="Submission Deadline"   value={formatValue(info.submissionDeadline)} />
-          <InfoRow label="Status"                value={rfp?.status ? <StatusBadge status={rfp.status} /> : null} />
+          <InfoRow
+            label="Status"
+            value={
+              onStatusChange ? (
+                <select
+                  value={rfp?.status || ''}
+                  onChange={handleStatusSelect}
+                  disabled={saving}
+                  style={{
+                    background: 'var(--bg-card, #1a1f2e)',
+                    color: 'var(--text, #e2e8f0)',
+                    border: '1px solid var(--border, #2d3748)',
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  {STATUS_OPTIONS.map(s => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              ) : rfp?.status ? <StatusBadge status={rfp.status} /> : null
+            }
+          />
 
           <TextBlock label="Project Overview"           value={info.projectOverview} />
           <TextBlock label="Scope of Work"              value={info.scopeOfWork} />

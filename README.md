@@ -24,7 +24,7 @@ AI-powered RFP (Request for Proposal) management platform. RFPilot helps teams u
 
 ### Overview / Dashboard
 
-- **Stat cards** — Total RFPs, Active, Under Review, Submitted, Archived, Win Rate — all live from `GET /rfps/stats`. Includes month-over-month % change badges.
+- **Stat cards** — Total RFPs, Active, Under Review, Submitted, Archived, Win Rate — all live from `GET /rfps/stats`. Includes month-over-month % change badges. Under Review / Submitted / Win Rate now populate correctly once RFP statuses are updated via `PATCH /rfps/:id/status`.
 - **Pipeline Value chart** — RFP count over the last 7 months (`GET /rfps/pipeline-value`).
 - **Top Clients panel** — Aggregated from AI-extracted organization names in uploaded RFPs (`GET /rfps/top-clients`).
 - **Tracking tabs**:
@@ -33,6 +33,7 @@ AI-powered RFP (Request for Proposal) management platform. RFPilot helps teams u
 - **Bid / No-Bid Decisions** — section showing RFPs with confirmed decisions, linking to their Detail pages.
 - **Notifications sidebar** — live from the `notifications` table, relative-time display.
 - **Filter bar** — Status, Client, Deadline range, Assigned Owner, Priority — all server-side (`WHERE` clauses on `GET /rfps/`). Client and Owner options are dynamically fetched from the live database.
+- **"Open AI Chat" button** — opens the same floating chat panel as the bottom-right FAB button via a shared `ChatContext`.
 
 ### RFP Upload Flow
 
@@ -50,18 +51,22 @@ AI-powered RFP (Request for Proposal) management platform. RFPilot helps teams u
 ### RFP Detail Page
 
 #### Overview Info Tab
-AI-extracted structured fields: title, organization, project overview, scope, submission deadline, important dates, requirements summary, evaluation criteria, key deliverables, risks. Empty state is shown only when the API genuinely returns empty/null.
+AI-extracted structured fields: title, organization, project overview, scope, submission deadline, important dates, requirements summary, evaluation criteria, key deliverables, risks. Empty state is shown only when the API genuinely returns empty/null. The **Status** field is a live `<select>` dropdown that calls `PATCH /rfps/:id/status` to move the RFP between any valid status value.
 
 #### Technical Analysis Tab
 - **Key Requirements** — `GET /rfps/:id/requirements?category=technical|legal|commercial`. Pills refetch from the backend on switch. Empty state distinguishes "still processing" from "completed with no data".
 - **Evaluation Criteria** — `GET /rfps/:id/evaluation-criteria`, rendered with weight percentage bars.
+- **Re-analyse button** — calls `POST /rfps/:id/reprocess` to re-run the AI extraction against stored document chunks. Returns per-category counts. Use this to backfill legal/commercial requirements and evaluation criteria on legacy RFPs.
+
+> **Known fix:** The AI upload prompt was previously truncated to 5,000 characters, causing legal, commercial, and evaluation criteria sections (which appear later in most RFPs) to return empty. Fixed to 15,000 characters with explicit category definitions in the system prompt.
 
 #### Decision & Workflow Tab
 - **AI Recommendation scores** — Technical Match, Commercial Match, Resource Readiness, Strategic Alignment, Win Probability, Risk Level — populated by the upload job.
 - **Green / Red flags** — from AI analysis.
 - **Bid / No-Bid buttons** — `PATCH /rfps/:id/decision`; persists and restores on reload.
 - **Editable fields** — Required Resources, Expected Risks, Budget Estimate — auto-save on blur.
-- **Approval pipeline** — real `ApprovalStep` records; click a circle to advance its status.
+- **Approval pipeline** — real `ApprovalStep` records; click a circle to advance `pending → in_review → approved`. When all 4 steps reach `approved`, the RFP status automatically advances to `submitted` and a notification is dispatched.
+- **Drafting Progress Tracker** — `GET /rfps/:id/drafts` returns per-section completion (5 expected sections). Each section shows "Generated · v{N}" once a draft exists. Overall completion % is calculated live. Draft content is persisted to `draft_documents` + `draft_versions` on each generation.
 
 #### Collaboration Tab
 Comment thread with nested replies (`GET/POST /rfps/:id/comments`). Posts persist to the database and re-render without a page reload. `@mention` autocomplete in the UI.
@@ -138,13 +143,16 @@ Session ID is stored in `sessionStorage` (survives in-tab navigation, resets on 
 | GET | `/rfps/owners` | Bearer | Distinct uploaders for filter dropdown |
 | GET | `/rfps/` | Bearer | List RFPs (status/client/priority/owner/deadline_range/has_decision filters) |
 | GET | `/rfps/:id` | Bearer | Full detail with bid decision, workflow, criteria |
+| PATCH | `/rfps/:id/status` | Bearer | Update RFP status to any valid value |
 | GET | `/rfps/:id/requirements` | Bearer | Requirements by category |
 | GET | `/rfps/:id/evaluation-criteria` | Bearer | Weighted evaluation criteria |
 | GET | `/rfps/:id/workflow` | Bearer | Ordered approval steps |
-| PATCH | `/rfps/:id/workflow/:stepId` | Bearer | Advance workflow step |
+| PATCH | `/rfps/:id/workflow/:stepId` | Bearer | Advance workflow step; auto-submits RFP when all steps approved |
 | GET | `/rfps/:id/notifications` | Bearer | Per-RFP notifications |
 | GET | `/rfps/:id/deadlines` | Bearer | Per-RFP deadlines |
-| POST | `/rfps/:id/generate-draft` | Bearer | AI draft generation |
+| POST | `/rfps/:id/generate-draft` | Bearer | AI draft generation (persists to draft_documents) |
+| GET | `/rfps/:id/drafts` | Bearer | Draft section completion status + overall % |
+| POST | `/rfps/:id/reprocess` | Bearer | Re-run AI extraction from stored chunks; re-populates requirements + criteria |
 | GET | `/rfps/:id/comments` | Bearer | Threaded comments |
 | POST | `/rfps/:id/comments` | Bearer | Post comment or reply |
 | DELETE | `/rfps/:id/comments/:commentId` | Bearer | Delete own comment |
@@ -269,6 +277,7 @@ project-RF-Pilot/
 │   ├── src/
 │   │   ├── App.jsx                     # Router + AuthProvider
 │   │   ├── auth/AuthProvider.jsx       # JWT context
+│   │   ├── context/ChatContext.jsx     # Global chat open/close state (ChatProvider + useChat)
 │   │   ├── pages/
 │   │   │   ├── Dashboard.jsx           # Overview dashboard
 │   │   │   ├── DetailPage.jsx          # RFP detail (4 tabs + sidebar)
@@ -278,9 +287,10 @@ project-RF-Pilot/
 │   │   │   ├── login.jsx
 │   │   │   └── Register.jsx
 │   │   ├── components/
+│   │   │   ├── icons/Icons.jsx         # Central inline SVG icon library (35+ Lucide-compatible icons)
 │   │   │   ├── dashboard/              # KPISection, TrackingTabs, FilterBar, BidDecisionCards, RightPanel
 │   │   │   ├── detailpage/             # OverviewTab, TechnicalTab, DecisionTab, CollaborationTab
-│   │   │   ├── layout/                 # TopNavbar, Layout, AIChat, DraftWorkspace, TabBar
+│   │   │   ├── layout/                 # TopNavbar, Layout (ChatProvider), AIChat, DraftWorkspace, TabBar
 │   │   │   ├── sidebar/                # RightSidebar (polling)
 │   │   │   ├── team/                   # InviteModal
 │   │   │   └── ui/                     # ProgressBar primitive

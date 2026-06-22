@@ -332,3 +332,127 @@ project-RF-Pilot/
 | 0009 | bid_decisions AI score columns |
 | 0010 | rfps.priority + rfp_deadlines.due_date_parsed |
 | 0011 | invitations.role + indexes |
+
+---
+
+## Latest Updates & Fixes
+
+> Covers commits `bc05343`, `ba69dab`, and `d45572c` — everything since the previous README update (`0682303`).
+
+---
+
+### Bug Fixes
+
+#### Win Rate — Null-Safe Display & Color Coding (`KPISection.jsx`, `rfp_routes.py`)
+
+**Root cause:** backend returned `0` when no RFPs had a final outcome, so the dashboard showed "0%" even with no data — misleading.
+
+**Fixes:**
+- `GET /rfps/stats` now returns `null` (not `0`) for `win_rate` when `decided == 0`
+- `KPISection` replaced the static Win Rate card with a dedicated `WinRateCard` component:
+  - `null` → displays `"N/A"` with subtitle "No completed RFPs yet"
+  - Real value → color-coded: **green ≥70%** / **amber 40–69%** / **red <40%**
+  - Subtitle shows "N won of M decided" when data exists
+
+#### Evaluation Criteria — Weight Distribution Bar (`TechnicalTab.jsx`)
+
+**Previously:** all criteria bars used the same single accent color; no validation.
+
+**Fixes:**
+- Added a 7-color stacked weight distribution bar at the top of the Evaluation Criteria section — each segment proportional to `weight_percentage` with a color legend
+- Each row now uses its own segment color (dot + filled progress bar)
+- Added a warning banner when total weights ≠ 100%: *"Total weight = N% — expected 100%. The document rubric may be incomplete."*
+
+---
+
+### New Features
+
+#### Overall Completion Tracker (`DecisionTab.jsx`, `GET /rfps/{id}/completion`)
+
+Replaced the previous draft-document-only tracker (which only counted 5 draft types) with a live 7-dimension completion score.
+
+**New backend endpoint:** `GET /rfps/{id}/completion`
+
+Returns per-section completion based on real DB signals:
+
+| Section | Weight | Completed when |
+|---|---|---|
+| Overview Extracted | 15% | `ai_summaries.objectives` is not null |
+| Requirements Extracted | 20% | `requirements` count > 0 |
+| Evaluation Criteria | 15% | `evaluation_criteria` count > 0 |
+| AI Bid Analysis | 20% | `bid_decisions` row has non-null scores |
+| Bid / No-Bid Decision | 15% | `bid_decisions.recommendation` is not null |
+| Approval Workflow | 10% | `approval_steps` count > 0 |
+| Team Collaboration | 5% | `comments` count > 0 |
+
+`overall_completion` = sum of weights for completed sections (0–100).
+
+**Frontend (`DecisionTab.jsx`):**
+- Progress bar color changes by threshold: green 100% / indigo ≥60% / amber ≥30% / red <30%
+- Each section shows a check icon (done) or pending ring, with a detail string (e.g. "17 requirements")
+- Auto-refetches when `rfp.status` or `decision` changes — no manual refresh needed
+- Draft document count shown as a sub-note if any drafts exist
+- Added `rfpApi.getCompletion(id)` to `services/api.js`
+
+#### Unified Dashboard Analytics API (`dashboard_routes.py`, `Dashboard.jsx`)
+
+**Problem:** the dashboard made 7 separate API calls on every mount, and applying a filter only affected the Bid/No-Bid section — KPI cards, pipeline chart, and top clients never re-queried.
+
+**New backend endpoint:** `GET /dashboard/analytics`
+
+Accepts filter query params: `?status=&client=&priority=&owner=&deadline_range=`
+
+Returns all dashboard data in one response:
+
+```json
+{
+  "stats":          { "total", "active", "under_review", "submitted", "won", "win_rate", ... },
+  "pipeline_value": [{ "month": "Jun", "value": 22 }],
+  "top_clients":    [{ "name", "count", "pct", "won", "lost", "win_rate" }],
+  "owners":         [{ "id", "name" }],
+  "notifications":  [...],
+  "deadlines":      [...],
+  "decision_rfps":  [...],
+  "generated_at":   "...",
+  "filters_applied": {}
+}
+```
+
+Key improvements:
+- **All filters now server-side** — every filter change re-queries all sections simultaneously, not just bid decisions
+- **`top_clients` now includes `win_rate` per client** (previously only name/count/pct)
+- **Deadline urgency recomputed live** from `due_date_parsed` on every request (not stale stored value)
+- **`win_rate` per client** based on actual `status = 'won'` / `'lost'` counts for that client's RFPs
+
+**Frontend (`Dashboard.jsx`):**
+- Replaced 7 `useAsync` calls with 1 call to `dashboardApi.getAnalytics(filters)`
+- Response is unpacked into exact prop shapes existing components already expect — zero component changes
+- Filter changes trigger a single refetch that updates every dashboard section
+- Added `dashboardApi.getAnalytics(filters)` to `services/api.js`
+
+---
+
+### New API Endpoints (since last README)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/rfps/:id/completion` | 7-dimension completion score (0–100) with per-section detail |
+| GET | `/dashboard/analytics` | All dashboard data in one call; supports full filter set |
+
+### Project Structure Updates
+
+```
+v3/
+├── src/
+│   ├── services/api.js          # + rfpApi.getCompletion(), dashboardApi.getAnalytics()
+│   ├── pages/Dashboard.jsx      # 7 API calls → 1 unified call
+│   └── components/
+│       ├── dashboard/KPISection.jsx        # Win Rate: null-safe, color-coded
+│       └── detailpage/
+│           ├── technical/TechnicalTab.jsx  # Eval criteria: weight bar + warning
+│           └── decision/DecisionTab.jsx    # 7-dimension completion tracker
+└── starter/
+    ├── dashboard_routes.py      # NEW — GET /dashboard/analytics
+    ├── main.py                  # + dashboard_router registered
+    └── rfp_routes.py            # + GET /rfps/{id}/completion; win_rate returns null not 0
+```

@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowUpRightIcon } from '../icons/Icons.jsx';
 
 const TYPE_DOT = {
   comment:       '#818cf8',
@@ -90,7 +91,7 @@ export default function RightPanel({ notifications = [], deadlines = [], onOpenC
             fontFamily: 'inherit',
           }}
         >
-          Open AI Chat ↗
+          Open AI Chat <ArrowUpRightIcon size={13} color="#fff" style={{ verticalAlign: 'middle', marginLeft: 3 }} />
         </button>
       </div>
 

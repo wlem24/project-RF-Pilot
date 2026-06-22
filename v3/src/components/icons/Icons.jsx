@@ -254,6 +254,13 @@ export function ChevronDownIcon({ size = 20, color = 'currentColor', strokeWidth
   </>);
 }
 
+export function ArrowUpRightIcon({ size = 20, color = 'currentColor', strokeWidth = 1.5, className = '' }) {
+  return base(size, color, strokeWidth, className, <>
+    <path d="M7 17 17 7" />
+    <path d="M7 7h10v10" />
+  </>);
+}
+
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
 export function StarIcon({ size = 20, color = 'currentColor', strokeWidth = 1.5, className = '' }) {

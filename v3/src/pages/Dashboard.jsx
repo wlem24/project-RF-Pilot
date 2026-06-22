@@ -7,10 +7,12 @@ import BidDecisionCards from '../components/dashboard/BidDecisionCards.jsx';
 import RightPanel       from '../components/dashboard/RightPanel.jsx';
 import { useAsync }     from '../hooks/useAsync.js';
 import { rfpApi, notifApi, deadlineApi } from '../services/api.js';
+import { useChat }      from '../context/ChatContext.jsx';
 import '../styles/dashboard.css';
 
 export default function Dashboard() {
   const [filters, setFilters] = useState({});
+  const { openChat } = useChat();
 
   // ── Global data (no filter dependency) ───────────────────────────
   const statsState    = useAsync(() => rfpApi.getStats().then(r => r.data),         []);
@@ -61,7 +63,7 @@ export default function Dashboard() {
         <RightPanel
           notifications={notifState.data || []}
           deadlines={deadlineState.data || []}
-          onOpenChat={() => {}}
+          onOpenChat={openChat}
         />
       </div>
     </div>

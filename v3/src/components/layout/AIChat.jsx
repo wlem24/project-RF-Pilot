@@ -51,11 +51,21 @@ export default function AIChat({ isOpen, onToggle }) {
     const [inputVal, setInputVal] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
 
     // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Focus input whenever the panel opens
+    useEffect(() => {
+        if (isOpen) {
+            // Small delay lets the CSS transition start before focus is applied
+            const t = setTimeout(() => inputRef.current?.focus(), 80);
+            return () => clearTimeout(t);
+        }
+    }, [isOpen]);
 
     // Re-check the active RFP on every navigation (e.g. right after an upload
     // navigates to /detail?id=X) and greet the user as soon as it changes.
@@ -151,6 +161,7 @@ export default function AIChat({ isOpen, onToggle }) {
 
                 <div className="chat-input-row">
                     <input
+                        ref={inputRef}
                         className="chat-input"
                         placeholder="Type your question..."
                         value={inputVal}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { InfoRow, StatusBadge, EmptyState } from '../../common/index.jsx';
+import { SparklesIcon } from '../../icons/Icons.jsx';
 
 const STATUS_OPTIONS = [
   { value: 'draft',        label: 'Draft'        },
@@ -67,7 +68,7 @@ export default function OverviewTab({ rfp, onStatusChange }) {
       {!hasAnyInfo ? (
         <EmptyState
           compact
-          icon="🧠"
+          icon={<SparklesIcon size={40} color="#94A3B8" />}
           title="Overview not yet available"
           description="Structured RFP details will appear here once AI processing completes."
         />

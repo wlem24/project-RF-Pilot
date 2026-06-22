@@ -4,6 +4,7 @@ import { useAsync }   from '../../../hooks/useAsync.js';
 import { rfpApi }     from '../../../services/api.js';
 import styles from './TechnicalTab.module.css';
 import { RefreshCw } from 'lucide-react';
+import { ClipboardIcon, ScaleIcon } from '../../icons/Icons.jsx';
 
 const CATEGORIES = ['Technical', 'Legal', 'Commercial'];
 const CAT_MAP    = { Technical: 'technical', Legal: 'legal', Commercial: 'commercial' };
@@ -25,7 +26,7 @@ function RequirementsList({ items, loading, rfpStatus }) {
     return (
       <EmptyState
         compact
-        icon="📋"
+        icon={<ClipboardIcon size={40} color="#94A3B8" />}
         title={isProcessing ? 'Extracting requirements…' : 'No requirements found in this category'}
         description={isProcessing ? 'Requirements will appear once AI analysis completes.' : 'Upload a richer RFP document to extract category-specific requirements.'}
       />
@@ -53,7 +54,7 @@ function EvalCriteriaSection({ items, loading, rfpStatus }) {
     return (
       <EmptyState
         compact
-        icon="⚖️"
+        icon={<ScaleIcon size={40} color="#94A3B8" />}
         title={isProcessing ? 'Extracting evaluation criteria…' : 'No evaluation criteria found'}
         description={isProcessing ? 'Criteria will appear once AI analysis completes.' : 'No scoring rubric was detected in this document.'}
       />

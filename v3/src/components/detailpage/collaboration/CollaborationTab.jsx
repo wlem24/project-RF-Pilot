@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { RiSendPlaneLine, RiReplyLine, RiUserLine } from 'react-icons/ri';
 import { EmptyState } from '../../common/index.jsx';
+import { MessageSquareIcon } from '../../icons/Icons.jsx';
 import { commentApi } from '../../../services/api.js';
 import { useAsync }   from '../../../hooks/useAsync.js';
 import styles from './CollaborationTab.module.css';
@@ -194,7 +195,7 @@ export default function CollaborationTab({ rfpId }) {
       {commentsState.loading ? (
         <div className="skeleton" style={{ height: 60, borderRadius: 8 }} />
       ) : comments.length === 0 ? (
-        <EmptyState compact icon="💬" title="No comments yet" description="Start the discussion below" />
+        <EmptyState compact icon={<MessageSquareIcon size={40} color="#94A3B8" />} title="No comments yet" description="Start the discussion below" />
       ) : (
         <div className={styles.commentList}>
           {comments.map(c => (

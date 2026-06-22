@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { invitationApi } from '../services/api.js';
+import { CheckCircleIcon, MailIcon } from '../components/icons/Icons.jsx';
 
 export default function AcceptInvitePage() {
   const [params]   = useSearchParams();
@@ -71,7 +72,9 @@ export default function AcceptInvitePage() {
   if (success) return (
     <div style={card}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
+          <CheckCircleIcon size={56} color="#22C55E" strokeWidth={1.5} />
+        </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', marginBottom: 8 }}>
           Account created!
         </h2>
@@ -91,7 +94,9 @@ export default function AcceptInvitePage() {
   return (
     <div style={card}>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>✉️</div>
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+          <MailIcon size={40} color="#6366F1" strokeWidth={1.5} />
+        </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: '0 0 4px' }}>
           You've been invited to RFPilot
         </h2>

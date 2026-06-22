@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { RiBellLine, RiCalendarEventLine } from 'react-icons/ri';
 import { EmptyState } from '../common/index.jsx';
+import { BellIcon, CalendarIcon } from '../icons/Icons.jsx';
 import { rfpApi }     from '../../services/api.js';
 import styles from './RightSidebar.module.css';
 
@@ -96,7 +97,7 @@ export default function RightSidebar({ rfpId }) {
         {notifLoading ? (
           <div className="skeleton" style={{ height: 48, borderRadius: 8 }} />
         ) : notifications.length === 0 ? (
-          <EmptyState compact icon="🔔" title="No notifications yet" />
+          <EmptyState compact icon={<BellIcon size={32} color="#94A3B8" />} title="No notifications yet" />
         ) : (
           <div>{notifications.slice(0, 8).map(n => <NotifItem key={n.id} n={n} />)}</div>
         )}
@@ -112,7 +113,7 @@ export default function RightSidebar({ rfpId }) {
         {dlLoading ? (
           <div className="skeleton" style={{ height: 48, borderRadius: 8 }} />
         ) : deadlines.length === 0 ? (
-          <EmptyState compact icon="📅" title="No upcoming deadlines" />
+          <EmptyState compact icon={<CalendarIcon size={32} color="#94A3B8" />} title="No upcoming deadlines" />
         ) : (
           <div className="space-y-3">
             {deadlines.map(d => <DeadlineItem key={d.id} d={d} />)}

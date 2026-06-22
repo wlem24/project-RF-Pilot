@@ -2,6 +2,7 @@
 // Shared UI primitives used everywhere in the app.
 
 import { RiLoader4Line, RiErrorWarningLine, RiRefreshLine } from 'react-icons/ri';
+import { ClipboardIcon } from '../icons/Icons.jsx';
 import styles from './Common.module.css';
 
 /* ── LoadingSpinner ────────────────────────── */
@@ -36,7 +37,7 @@ export function ErrorMessage({ message, onRetry }) {
 export function EmptyState({ icon, title, description, action, compact }) {
   return (
     <div className={`empty-state ${compact ? styles.compact : ''}`}>
-      <div className="empty-icon">{icon || '📋'}</div>
+      <div className="empty-icon">{icon || <ClipboardIcon size={40} color="#94A3B8" />}</div>
       <p className="empty-title">{title}</p>
       {description && <p className="empty-desc">{description}</p>}
       {action}
@@ -124,7 +125,7 @@ export function DataTable({ columns, data, rowKey, emptyMessage }) {
           {data.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className={styles.emptyCell}>
-                <EmptyState compact icon="📋" title={emptyMessage || 'No data available'} />
+                <EmptyState compact icon={<ClipboardIcon size={32} color="#94A3B8" />} title={emptyMessage || 'No data available'} />
               </td>
             </tr>
           ) : (

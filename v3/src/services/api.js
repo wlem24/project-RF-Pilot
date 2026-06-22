@@ -79,6 +79,7 @@ export const invitationApi = {
   list:    ()                       => api.get('/invitations/'),
   create:  (email, role)            => api.post('/invitations/', { email, role }),
   revoke:  (id)                     => api.delete(`/invitations/${id}`),
+  resend:  (id)                     => api.post(`/invitations/${id}/resend`),
   preview: (token)                  => api.get(`/invitations/${token}/preview`),
   accept:  (token, name, password)  => api.post(`/invitations/${token}/accept`, { name, password }),
 };

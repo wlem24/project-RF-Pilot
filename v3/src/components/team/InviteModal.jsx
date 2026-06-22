@@ -2,26 +2,32 @@ import { useState } from 'react';
 import { invitationApi } from '../../services/api.js';
 
 export default function InviteModal({ onClose, onSuccess }) {
-  const [email,     setEmail]     = useState('');
-  const [role,      setRole]      = useState('user');
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState('');
-  const [inviteUrl, setInviteUrl] = useState('');  // shown when SMTP not configured
+  const [email,       setEmail]       = useState('');
+  const [role,        setRole]        = useState('user');
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [inviteUrl,   setInviteUrl]   = useState('');
+  const [emailStatus, setEmailStatus] = useState('');  // "sent" | "failed" | "no_smtp_configured"
+  const [warning,     setWarning]     = useState('');
+  const [copied,      setCopied]      = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setInviteUrl('');
+    setWarning('');
+    setEmailStatus('');
     if (!email.trim()) { setError('Email is required.'); return; }
 
     setLoading(true);
     try {
       const res  = await invitationApi.create(email.trim(), role);
       const data = res.data;
-
-      if (data.inviteUrl) {
-        // SMTP not configured — show the link so admin can share manually
-        setInviteUrl(data.inviteUrl);
+      setEmailStatus(data.emailStatus);
+      setInviteUrl(data.inviteUrl || '');
+      setWarning(data.warning || '');
+      if (data.emailStatus !== 'sent') {
+        // Stay open and show URL fallback — don't call onSuccess yet
       } else {
         onSuccess();
       }
@@ -31,6 +37,13 @@ export default function InviteModal({ onClose, onSuccess }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function copyUrl() {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   return (
@@ -51,21 +64,34 @@ export default function InviteModal({ onClose, onSuccess }) {
           An invitation email will be sent with a secure sign-up link.
         </p>
 
-        {inviteUrl ? (
+        {emailStatus && emailStatus !== 'sent' ? (
           <div>
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#15803d', margin: '0 0 8px' }}>
-                ✓ Invitation created — share this link manually
+            <div style={{
+              background: emailStatus === 'failed' ? '#fff1f2' : '#fffbeb',
+              border: `1px solid ${emailStatus === 'failed' ? '#fecdd3' : '#fde68a'}`,
+              borderRadius: 8, padding: 16, marginBottom: 16,
+            }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: emailStatus === 'failed' ? '#be123c' : '#92400e', margin: '0 0 6px' }}>
+                {emailStatus === 'failed' ? 'Email delivery failed' : 'Email not configured'}
               </p>
-              <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 8px' }}>
-                Email delivery is not configured (SMTP_HOST is empty). Copy and share this link:
+              <p style={{ fontSize: 11, color: '#6b7280', margin: '0 0 10px' }}>
+                {warning || 'Share this link manually:'}
               </p>
-              <input
-                readOnly
-                value={inviteUrl}
-                onClick={e => e.target.select()}
-                style={{ width: '100%', fontSize: 12, padding: '6px 8px', borderRadius: 6, border: '0.5px solid #d1d5db', background: '#fff', boxSizing: 'border-box' }}
-              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  readOnly
+                  value={inviteUrl}
+                  onClick={e => e.target.select()}
+                  style={{ flex: 1, fontSize: 11, padding: '6px 8px', borderRadius: 6, border: '0.5px solid #d1d5db', background: '#fff', minWidth: 0 }}
+                />
+                <button
+                  onClick={copyUrl}
+                  className="btn btn-outline"
+                  style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
             <button className="btn btn-primary" style={{ width: '100%' }} onClick={onSuccess}>
               Done

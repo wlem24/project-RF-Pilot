@@ -12,6 +12,7 @@ Configure these environment variables to enable real email delivery:
 If SMTP_HOST is empty the email is NOT sent but the invite link is
 included in the API response so it can be shared manually during development.
 """
+import logging
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -24,22 +25,38 @@ SMTP_PASS    = os.getenv("SMTP_PASS", "")
 SMTP_FROM    = os.getenv("SMTP_FROM", "noreply@rfpilot.com")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3001")
 
+logger = logging.getLogger(__name__)
+
+# Email delivery status constants
+EMAIL_SENT        = "sent"
+EMAIL_FAILED      = "failed"
+EMAIL_NO_SMTP     = "no_smtp_configured"
+
 
 def build_invite_url(token: str) -> str:
     return f"{FRONTEND_URL}/accept-invite?token={token}"
 
 
-def send_invitation_email(to_email: str, invited_by_name: str, role: str, token: str) -> bool:
+def send_invitation_email(to_email: str, invited_by_name: str, role: str, token: str) -> dict:
     """
     Send an invitation email.
-    Returns True if the email was sent successfully, False otherwise.
+
+    Returns a dict with keys:
+      status    — "sent" | "failed" | "no_smtp_configured"
+      invite_url — always present so admin can copy it
+      message   — human-readable note when email was not sent
     """
     invite_url = build_invite_url(token)
 
     if not SMTP_HOST or not SMTP_USER:
-        print(f"[INVITE] No SMTP configured. Share this invite link manually:")
-        print(f"[INVITE] {invite_url}")
-        return False
+        logger.warning(
+            "SMTP not configured. Invite URL for %s: %s", to_email, invite_url
+        )
+        return {
+            "status"     : EMAIL_NO_SMTP,
+            "invite_url" : invite_url,
+            "message"    : "SMTP is not configured — share this invite link manually.",
+        }
 
     html_body = f"""
     <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:40px 20px">
@@ -75,8 +92,16 @@ def send_invitation_email(to_email: str, invited_by_name: str, role: str, token:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASS)
             server.sendmail(SMTP_FROM, to_email, msg.as_string())
-        print(f"[INVITE] Email sent to {to_email}")
-        return True
+        logger.info("Invite email sent to %s", to_email)
+        return {
+            "status"     : EMAIL_SENT,
+            "invite_url" : invite_url,
+        }
+
     except Exception as exc:
-        print(f"[INVITE] Email send failed: {exc}")
-        return False
+        logger.error("Email send failed for %s: %s", to_email, exc)
+        return {
+            "status"     : EMAIL_FAILED,
+            "invite_url" : invite_url,
+            "message"    : f"Email delivery failed — share this invite link manually. Error: {exc}",
+        }

@@ -11,20 +11,40 @@ export default function UploadRFPPage() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
 
-  const [file,       setFile]       = useState(null);
-  const [notes,      setNotes]      = useState('');
-  const [dragging,   setDragging]   = useState(false);
-  const [uploading,  setUploading]  = useState(false);
-  const [error,      setError]      = useState(null);
-  const [summary,    setSummary]    = useState('');
-  const [uploadedId, setUploadedId] = useState(null);
-  const [draftOpen,  setDraftOpen]  = useState(false);
+  const [file,             setFile]             = useState(null);
+  const [notes,            setNotes]            = useState('');
+  const [estimatedValue,   setEstimatedValue]   = useState('');
+  const [dragging,         setDragging]         = useState(false);
+  const [uploading,        setUploading]        = useState(false);
+  const [error,            setError]            = useState(null);
+  const [validationErrors, setValidationErrors] = useState([]);
+  const [summary,          setSummary]          = useState('');
+  const [uploadedId,       setUploadedId]       = useState(null);
+  const [draftOpen,        setDraftOpen]        = useState(false);
 
   const notifications = [];
   const deadlines     = [];
 
+  function validateFile(f) {
+    const errs = [];
+    if (!f.name.toLowerCase().endsWith('.pdf'))
+      errs.push('Only PDF files are accepted.');
+    if (f.size === 0)
+      errs.push('File appears to be empty.');
+    if (f.size > 50 * 1024 * 1024)
+      errs.push(`File is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum: 50 MB.`);
+    return errs;
+  }
+
   const handleFileChange = async (f) => {
     if (!f) return;
+    const errs = validateFile(f);
+    if (errs.length > 0) {
+      setValidationErrors(errs);
+      setFile(null);
+      return;
+    }
+    setValidationErrors([]);
     setFile(f);
     setError(null);
     setSummary('');
@@ -34,6 +54,7 @@ export default function UploadRFPPage() {
     try {
       const form = new FormData();
       form.append('file', f);
+      if (estimatedValue) form.append('estimated_value', estimatedValue);
       const response = await rfpApi.upload(form, f.name);
       const { rfp_id, summary: aiSummary } = response.data;
       localStorage.setItem('rfpilot_active_rfp', JSON.stringify({ id: rfp_id, filename: f.name }));
@@ -41,7 +62,11 @@ export default function UploadRFPPage() {
       setUploadedId(rfp_id);
     } catch (uploadError) {
       console.error(uploadError);
-      setError('Upload failed. Please try again.');
+      const detail = uploadError.response?.data?.detail;
+      if (uploadError.response?.status === 422 || uploadError.response?.status === 413)
+        setError(typeof detail === 'string' ? detail : 'File rejected by server. Check file type and size.');
+      else
+        setError('Upload failed. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -90,6 +115,16 @@ export default function UploadRFPPage() {
                 />
               </div>
 
+              {validationErrors.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  {validationErrors.map((e, i) => (
+                    <div key={i} style={{ fontSize: 12, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                      <RiCloseLine style={{ flexShrink: 0 }} /> {e}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {file && (
                 <div className={styles.filePreview}>
                   <RiFileLine className={styles.fileIcon} />
@@ -103,6 +138,22 @@ export default function UploadRFPPage() {
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* ── Estimated Value ── */}
+            <div className="card">
+              <label className={styles.fieldLabel}>Estimated Contract Value <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: 11 }}>(optional)</span></label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="1000"
+                placeholder="e.g. 500000"
+                value={estimatedValue}
+                onChange={e => setEstimatedValue(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box' }}
+              />
+              <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>Enter the estimated value in SAR/USD — used in the Pipeline Value chart on the dashboard.</p>
             </div>
 
             {/* ── Notes ── */}

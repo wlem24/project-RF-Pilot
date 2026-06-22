@@ -5,7 +5,7 @@ import { BellIcon, CalendarIcon } from '../icons/Icons.jsx';
 import { rfpApi }     from '../../services/api.js';
 import styles from './RightSidebar.module.css';
 
-const POLL_MS = 15000; // 15 s
+const POLL_MS = 60000; // 60 s fallback — SSE handles real-time updates
 
 function relTime(iso) {
   if (!iso) return '';
@@ -75,7 +75,15 @@ export default function RightSidebar({ rfpId }) {
     setDlLoading(true);
     fetchAll();
     pollRef.current = setInterval(fetchAll, POLL_MS);
-    return () => clearInterval(pollRef.current);
+
+    // Also refresh immediately on SSE push events
+    const handler = () => fetchAll();
+    window.addEventListener('rfpilot:notification', handler);
+
+    return () => {
+      clearInterval(pollRef.current);
+      window.removeEventListener('rfpilot:notification', handler);
+    };
   }, [rfpId]);
 
   const notifications = notifData.items || [];

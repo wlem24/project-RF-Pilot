@@ -61,28 +61,52 @@ DEFAULT_WORKFLOW = [
 @router.post("/upload", status_code=201)
 def upload_rfp(
     title: str,
+    estimated_value: float = 0,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     import fitz  # PyMuPDF
 
-    if not file.filename.lower().endswith((".pdf", ".docx", ".txt")):
-        raise HTTPException(status_code=400, detail="Only PDF, DOCX, and TXT files are supported.")
+    ext = (file.filename or "").lower()
+    if not ext.endswith((".pdf", ".docx", ".txt")):
+        raise HTTPException(status_code=422, detail="Only PDF, DOCX, and TXT files are accepted.")
 
     contents = file.file.read()
+
+    if len(contents) == 0:
+        raise HTTPException(status_code=422, detail="The uploaded file is empty.")
+
     if len(contents) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 50 MB.")
+        size_mb = len(contents) / 1024 / 1024
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({size_mb:.1f} MB). Maximum size is 50 MB.",
+        )
+
+    # Validate PDF integrity before creating any DB rows
+    raw_text = ""
+    if ext.endswith(".pdf"):
+        try:
+            doc = fitz.open(stream=contents, filetype="pdf")
+            if doc.page_count == 0:
+                raise ValueError("PDF has no pages.")
+            raw_text = "".join(page.get_text() for page in doc)
+            doc.close()
+        except Exception as pdf_err:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"PDF could not be parsed: {pdf_err}. "
+                    "Ensure the file is not password-protected or corrupted."
+                ),
+            )
+    else:
+        raw_text = contents.decode("utf-8", errors="ignore")
 
     rfp = models.RFP(uploaded_by=current_user.id, title=title, status="draft")
     db.add(rfp)
     db.commit()
-
-    try:
-        doc = fitz.open(stream=contents, filetype="pdf")
-        raw_text = "".join(page.get_text() for page in doc)
-    except Exception:
-        raw_text = contents.decode("utf-8", errors="ignore")
 
     if not raw_text.strip():
         raise HTTPException(status_code=400, detail="The uploaded file seems to be empty or unreadable.")
@@ -308,6 +332,14 @@ def upload_rfp(
             budget_estimate   =(ba.get("budget_estimate") or "").strip() or None,
         ))
 
+    # Store estimated_value in rfp_information (upsert)
+    if estimated_value and estimated_value > 0:
+        rfp_info = db.query(models.RFPInformation).filter_by(rfp_id=rfp.id).first()
+        if rfp_info:
+            rfp_info.estimated_value = estimated_value
+        else:
+            db.add(models.RFPInformation(rfp_id=rfp.id, estimated_value=estimated_value))
+
     # Create default workflow steps
     for stage, order in DEFAULT_WORKFLOW:
         db.add(models.ApprovalStep(
@@ -408,6 +440,11 @@ def get_pipeline_value(
     current_user: models.User = Depends(get_current_user),
 ):
     rfps = db.query(models.RFP).all()
+    # Pre-load estimated_value from rfp_information
+    info_map = {
+        i.rfp_id: float(i.estimated_value or 0)
+        for i in db.query(models.RFPInformation).all()
+    }
     abbr = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
     now  = datetime.now()
     result = []
@@ -415,11 +452,16 @@ def get_pipeline_value(
         total_months = now.year * 12 + now.month - 1 - i
         yr = total_months // 12
         mo = (total_months % 12) + 1
-        count = sum(
-            1 for r in rfps
+        month_rfps = [
+            r for r in rfps
             if r.created_at and r.created_at.year == yr and r.created_at.month == mo
-        )
-        result.append({"month": abbr[mo - 1], "value": count})
+        ]
+        total_value = sum(info_map.get(r.id, 0) for r in month_rfps)
+        result.append({
+            "month": abbr[mo - 1],
+            "value": total_value,
+            "count": len(month_rfps),
+        })
     return result
 
 

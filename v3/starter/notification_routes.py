@@ -1,12 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+import json
+import uuid as _uuid
+from typing import Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
-from auth_utils import get_current_user
+from auth_utils import get_current_user, decode_access_token
 import models
 
 notif_router    = APIRouter(prefix="/notifications", tags=["Notifications"])
 deadline_router = APIRouter(prefix="/deadlines",     tags=["Deadlines"])
+
+# ── SSE subscriber registry ────────────────────────────────────────────────────
+# Maps user_id (str) → list of asyncio queues (one per open browser tab).
+_sse_subscribers: Dict[str, List[asyncio.Queue]] = {}
+
+
+async def push_notification(user_id: str, payload: dict) -> None:
+    """Push a notification event to all open SSE streams for this user."""
+    for q in _sse_subscribers.get(str(user_id), []):
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            pass
 
 
 # ── Notifications ──────────────────────────────────────────────────────────
@@ -34,6 +53,47 @@ def list_notifications(
         }
         for n in rows
     ]
+
+
+@notif_router.get("/stream")
+async def notification_stream(
+    token: str = Query(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Server-Sent Events stream for real-time notifications.
+    EventSource doesn't support custom headers, so the JWT is passed
+    as ?token=<jwt> query param.
+    """
+    try:
+        payload = decode_access_token(token)
+        user_id = str(payload.get("sub") or payload.get("email", ""))
+    except Exception:
+        from fastapi.responses import Response
+        return Response(status_code=401)
+
+    queue: asyncio.Queue = asyncio.Queue(maxsize=50)
+    _sse_subscribers.setdefault(user_id, []).append(queue)
+
+    async def generator():
+        try:
+            yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+        finally:
+            subs = _sse_subscribers.get(user_id, [])
+            if queue in subs:
+                subs.remove(queue)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @notif_router.post("/{notif_id}/read")

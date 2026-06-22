@@ -6,17 +6,25 @@ Chart.register(...registerables);
 const CHART_GRID  = 'rgba(255,255,255,0.05)';
 const CHART_TICKS = '#484f58';
 
+function fmtValue(v) {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}K`;
+  return String(v);
+}
+
 // ── Pipeline Tab ───────────────────────────────────────────────────
 function PipelineTab({ pipelineData = [], topClients = [] }) {
   const canvasRef = useRef(null);
   const chartRef  = useRef(null);
 
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+  const labels      = pipelineData.map(d => d.month);
+  const values      = pipelineData.map(d => d.value);
+  const counts      = pipelineData.map(d => d.count ?? 0);
+  const hasValue    = values.some(v => v > 0);
 
-    const labels = pipelineData.map(d => d.month);
-    const values = pipelineData.map(d => d.value);
+  useEffect(() => {
+    if (!canvasRef.current || !hasValue) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
     chartRef.current = new Chart(canvasRef.current, {
       type: 'line',
@@ -27,7 +35,7 @@ function PipelineTab({ pipelineData = [], topClients = [] }) {
             data: values,
             borderColor: '#4f46e5',
             borderWidth: 2,
-            pointRadius: values.some(v => v > 0) ? 4 : 0,
+            pointRadius: 4,
             tension: 0.4,
             fill: true,
             backgroundColor: '#4f46e510',
@@ -37,7 +45,17 @@ function PipelineTab({ pipelineData = [], topClients = [] }) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const idx = ctx.dataIndex;
+                return [`Value: ${fmtValue(values[idx])}`, `RFPs: ${counts[idx]}`];
+              },
+            },
+          },
+        },
         scales: {
           x: {
             grid: { color: CHART_GRID },
@@ -48,8 +66,7 @@ function PipelineTab({ pipelineData = [], topClients = [] }) {
             ticks: {
               color: CHART_TICKS,
               font: { size: 10 },
-              stepSize: 1,
-              callback: v => (v % 1 === 0 ? v : ''),
+              callback: v => fmtValue(v),
             },
             beginAtZero: true,
           },
@@ -63,7 +80,17 @@ function PipelineTab({ pipelineData = [], topClients = [] }) {
     <div style={{ padding: '14px 16px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 190px', gap: 12 }}>
         <div style={{ position: 'relative', height: 150 }}>
-          <canvas ref={canvasRef} role="img" aria-label="Pipeline value" />
+          {hasValue
+            ? <canvas ref={canvasRef} role="img" aria-label="Pipeline value" />
+            : (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <p style={{ fontSize: 12, color: 'var(--faint)', textAlign: 'center', lineHeight: 1.5 }}>
+                  No estimated values recorded yet.<br />
+                  <span style={{ fontSize: 11 }}>Add contract value when uploading RFPs.</span>
+                </p>
+              </div>
+            )
+          }
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', marginBottom: 10 }}>

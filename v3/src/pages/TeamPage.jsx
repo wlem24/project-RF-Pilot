@@ -91,6 +91,11 @@ export default function TeamPage() {
     invitationsState.refetch();
   }
 
+  async function handleResend(inviteId) {
+    await invitationApi.resend(inviteId);
+    invitationsState.refetch();
+  }
+
   return (
     <div className="page">
       <TopNavbar />
@@ -205,14 +210,24 @@ export default function TeamPage() {
                       </td>
                       <td style={{ padding: '10px 8px' }}><StatusBadge status={inv.status} /></td>
                       <td style={{ padding: '10px 8px' }}>
-                        {inv.status === 'pending' && (
-                          <button
-                            onClick={() => handleRevoke(inv.id)}
-                            style={{ fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-                          >
-                            Revoke
-                          </button>
-                        )}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          {(inv.status === 'pending' || inv.status === 'expired') && (
+                            <button
+                              onClick={() => handleResend(inv.id)}
+                              style={{ fontSize: 11, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              Resend
+                            </button>
+                          )}
+                          {inv.status === 'pending' && (
+                            <button
+                              onClick={() => handleRevoke(inv.id)}
+                              style={{ fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

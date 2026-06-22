@@ -65,7 +65,7 @@ def create_invitation(
     db.commit()
     db.refresh(invite)
 
-    email_sent = send_invitation_email(
+    email_result = send_invitation_email(
         to_email       =body.email,
         invited_by_name=current_user.name,
         role           =body.role,
@@ -73,15 +73,18 @@ def create_invitation(
     )
 
     return {
-        "id"        : str(invite.id),
-        "email"     : invite.email,
-        "role"      : invite.role,
-        "status"    : invite.status,
-        "expiresAt" : invite.expires_at.isoformat(),
-        "createdAt" : invite.created_at.isoformat(),
-        "emailSent" : email_sent,
-        # Return link when email is not configured so admin can share manually
-        "inviteUrl" : build_invite_url(token) if not email_sent else None,
+        "id"          : str(invite.id),
+        "email"       : invite.email,
+        "role"        : invite.role,
+        "status"      : invite.status,
+        "expiresAt"   : invite.expires_at.isoformat(),
+        "createdAt"   : invite.created_at.isoformat(),
+        "emailSent"   : email_result["status"] == "sent",
+        "emailStatus" : email_result["status"],
+        # Always return the URL so the admin can copy it
+        "inviteUrl"   : email_result["invite_url"],
+        # Only present when delivery was not successful
+        "warning"     : email_result.get("message"),
     }
 
 
@@ -118,6 +121,42 @@ def list_invitations(
 
     db.commit()   # persist any auto-expired status updates
     return result
+
+
+# ── POST /invitations/{id}/resend ────────────────────────────────────────────
+
+@router.post("/{invitation_id}/resend", status_code=200)
+def resend_invitation(
+    invitation_id: _uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    inv = db.get(models.Invitation, invitation_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invitation not found.")
+    if inv.status not in ("pending", "expired"):
+        raise HTTPException(status_code=409, detail=f"Cannot resend a '{inv.status}' invitation.")
+
+    # Reset expiry and mark pending
+    inv.status     = "pending"
+    inv.expires_at = datetime.now(timezone.utc) + timedelta(days=INVITE_EXPIRE_DAYS)
+    db.commit()
+
+    email_result = send_invitation_email(
+        to_email       =inv.email,
+        invited_by_name=current_user.name,
+        role           =inv.role,
+        token          =inv.token,
+    )
+
+    return {
+        "id"          : str(inv.id),
+        "email"       : inv.email,
+        "emailStatus" : email_result["status"],
+        "inviteUrl"   : email_result["invite_url"],
+        "warning"     : email_result.get("message"),
+        "expiresAt"   : inv.expires_at.isoformat(),
+    }
 
 
 # ── DELETE /invitations/{id} — revoke ─────────────────────────────────────────

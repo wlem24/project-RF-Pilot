@@ -110,37 +110,50 @@ def upload_rfp(
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": (
-                    "You are an expert RFP analyzer. Extract structured information from the RFP text. "
+                    "You are an expert RFP analyst. Read the ENTIRE RFP text carefully — "
+                    "requirements and criteria often appear in the middle and latter sections. "
                     "Return a JSON object with EXACTLY these keys:\n"
                     "- summary: brief professional summary string\n"
                     "- overview: {title, organization, projectOverview, scopeOfWork, submissionDeadline, "
                     "  importantDates, requirementsSummary, evaluationCriteria, keyDeliverables, risks} "
                     "  (all values plain strings or null)\n"
-                    "- requirements: {technical: [string], legal: [string], commercial: [string]} "
-                    "  (arrays of extracted requirement strings, empty array if none found)\n"
+                    "- requirements: {\n"
+                    "    technical: [string],   <- software/hardware specs, integration, infrastructure, "
+                    "                              system architecture, performance, technology stack\n"
+                    "    legal: [string],       <- compliance obligations, regulatory requirements, "
+                    "                              certifications, data protection, GDPR/privacy law, "
+                    "                              insurance, liability, indemnification, governing law, "
+                    "                              IP ownership, confidentiality, audit rights\n"
+                    "    commercial: [string]   <- pricing structure, payment terms, contract duration, "
+                    "                              SLA commitments, penalties/liquidated damages, "
+                    "                              budget constraints, invoicing, warranty periods, "
+                    "                              termination clauses, performance bonds\n"
+                    "  }\n"
+                    "  Use empty array [] only if genuinely absent — do NOT put legal/commercial items "
+                    "  under technical.\n"
                     "- criteria: [{name: string, weight: number or null, description: string}] "
-                    "  (evaluation criteria with percentages; empty array if no rubric present)\n"
+                    "  <- ALL scoring rubric entries, evaluation weights, selection criteria, "
+                    "     assessment methodology; empty array only if no rubric exists\n"
                     "- deadlines: [{title: string, date: string}] "
                     "  (all dates/deadlines mentioned; empty array if none)\n"
                     "- bid_analysis: {\n"
-                    "    technical_fit: integer 0-100 (how well a typical firm could meet the technical requirements),\n"
-                    "    commercial_fit: integer 0-100 (commercial/pricing competitiveness likelihood),\n"
-                    "    resource_readiness: integer 0-100 (estimate of resource availability needed),\n"
-                    "    strategic_alignment: integer 0-100 (strategic value of winning this RFP),\n"
-                    "    win_probability: integer 0-100 (overall estimated probability of winning),\n"
-                    "    risk_level: integer 0-100 (higher = more risky; based on complexity, deadlines, ambiguity),\n"
-                    "    positive_flags: [string] (up to 5 short reasons to bid),\n"
-                    "    risk_flags: [string] (up to 5 short risk factors),\n"
-                    "    required_resources: string (brief summary of key resources needed, or null),\n"
-                    "    expected_risks: string (brief summary of main risks, or null),\n"
-                    "    budget_estimate: string (rough budget range if estimable from the text, or null)\n"
+                    "    technical_fit: integer 0-100,\n"
+                    "    commercial_fit: integer 0-100,\n"
+                    "    resource_readiness: integer 0-100,\n"
+                    "    strategic_alignment: integer 0-100,\n"
+                    "    win_probability: integer 0-100,\n"
+                    "    risk_level: integer 0-100,\n"
+                    "    positive_flags: [string],\n"
+                    "    risk_flags: [string],\n"
+                    "    required_resources: string or null,\n"
+                    "    expected_risks: string or null,\n"
+                    "    budget_estimate: string or null\n"
                     "  }\n"
-                    "Base bid_analysis only on what is inferable from the RFP text. "
-                    "Never nest objects inside overview fields. Never invent data not present in the text."
+                    "Never nest objects inside overview fields. Never invent data not in the text."
                 )},
-                {"role": "user", "content": f"Analyze this RFP text:\n\n{raw_text[:5000]}"}
+                {"role": "user", "content": f"Analyze this RFP text:\n\n{raw_text[:15000]}"}
             ],
-            max_tokens=2000,
+            max_tokens=3500,
         )
         raw_content = extraction_response.choices[0].message.content.strip()
 
@@ -851,6 +864,130 @@ def get_rfp_deadlines(
         }
         for d in rows
     ]
+
+
+# ─────────────────────────────────────────────
+#  Re-process (re-extract AI data for existing RFP)
+# ─────────────────────────────────────────────
+
+@router.post("/{rfp_id}/reprocess", status_code=200)
+def reprocess_rfp(
+    rfp_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Re-runs AI extraction on the stored chunk content.
+    Clears and re-populates requirements and evaluation_criteria rows.
+    Useful after prompt improvements or when legacy RFPs have empty categories.
+    """
+    rfp = db.get(models.RFP, rfp_id)
+    if not rfp:
+        raise HTTPException(status_code=404, detail="RFP not found.")
+
+    # Reconstruct source text from stored document chunks
+    chunks = (
+        db.query(models.DocumentChunk)
+        .filter_by(rfp_id=rfp_id)
+        .order_by(models.DocumentChunk.chunk_index)
+        .all()
+    )
+    if not chunks:
+        raise HTTPException(status_code=400, detail="No stored content found for this RFP. Re-upload the file.")
+
+    source_text = " ".join(c.content for c in chunks)
+
+    # Delete stale requirements and evaluation criteria
+    db.query(models.Requirement).filter_by(rfp_id=rfp_id).delete()
+    db.query(models.EvaluationCriteria).filter_by(rfp_id=rfp_id).delete()
+    db.commit()
+
+    requirements_extracted: dict = {}
+    criteria_extracted: list = []
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": (
+                    "You are an expert RFP analyst. Read the ENTIRE RFP text carefully — "
+                    "requirements and criteria often appear in the middle and latter sections. "
+                    "Return a JSON object with EXACTLY these keys:\n"
+                    "- requirements: {\n"
+                    "    technical: [string],   <- software/hardware specs, integration, infrastructure, "
+                    "                              system architecture, performance, technology stack\n"
+                    "    legal: [string],       <- compliance obligations, regulatory requirements, "
+                    "                              certifications, data protection, GDPR/privacy law, "
+                    "                              insurance, liability, indemnification, governing law, "
+                    "                              IP ownership, confidentiality, audit rights\n"
+                    "    commercial: [string]   <- pricing structure, payment terms, contract duration, "
+                    "                              SLA commitments, penalties/liquidated damages, "
+                    "                              budget constraints, invoicing, warranty periods, "
+                    "                              termination clauses, performance bonds\n"
+                    "  }\n"
+                    "  Use empty array [] only if genuinely absent.\n"
+                    "- criteria: [{name: string, weight: number or null, description: string}] "
+                    "  <- ALL scoring rubric entries, evaluation weights, selection criteria; "
+                    "     empty array only if no rubric exists\n"
+                    "Never invent data not present in the text."
+                )},
+                {"role": "user", "content": f"Analyze this RFP text:\n\n{source_text[:15000]}"},
+            ],
+            max_tokens=3000,
+        )
+        parsed = json.loads(resp.choices[0].message.content.strip())
+        reqs_raw = parsed.get("requirements") or {}
+        if isinstance(reqs_raw, dict):
+            requirements_extracted = reqs_raw
+        crit_raw = parsed.get("criteria") or []
+        if isinstance(crit_raw, list):
+            criteria_extracted = crit_raw
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI extraction failed: {exc}")
+
+    # Save refreshed requirements
+    saved_req = 0
+    for category, req_list in requirements_extracted.items():
+        if category not in ("technical", "legal", "commercial"):
+            continue
+        for req_text in (req_list or []):
+            if isinstance(req_text, str) and req_text.strip():
+                db.add(models.Requirement(
+                    rfp_id  =rfp_id,
+                    category=category,
+                    text    =req_text.strip(),
+                ))
+                saved_req += 1
+
+    # Save refreshed evaluation criteria
+    saved_crit = 0
+    for crit in criteria_extracted:
+        if not isinstance(crit, dict):
+            continue
+        name = (crit.get("name") or crit.get("criterion") or "").strip()
+        if name:
+            weight = crit.get("weight")
+            try:
+                weight = float(weight) if weight is not None else None
+            except (TypeError, ValueError):
+                weight = None
+            db.add(models.EvaluationCriteria(
+                rfp_id  =rfp_id,
+                criteria=name,
+                weight  =weight,
+                notes   =crit.get("description"),
+            ))
+            saved_crit += 1
+
+    db.commit()
+
+    return {
+        "rfp_id"              : str(rfp_id),
+        "requirements_saved"  : saved_req,
+        "criteria_saved"      : saved_crit,
+        "categories"          : {k: len(v) for k, v in requirements_extracted.items() if isinstance(v, list)},
+    }
 
 
 # ─────────────────────────────────────────────

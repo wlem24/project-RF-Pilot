@@ -3,6 +3,7 @@ import { EmptyState } from '../../common/index.jsx';
 import { useAsync }   from '../../../hooks/useAsync.js';
 import { rfpApi }     from '../../../services/api.js';
 import styles from './TechnicalTab.module.css';
+import { RefreshCw } from 'lucide-react';
 
 const CATEGORIES = ['Technical', 'Legal', 'Commercial'];
 const CAT_MAP    = { Technical: 'technical', Legal: 'legal', Commercial: 'commercial' };
@@ -82,6 +83,8 @@ function EvalCriteriaSection({ items, loading, rfpStatus }) {
 
 export default function TechnicalTab({ rfp }) {
   const [activeCategory, setActiveCategory] = useState('Technical');
+  const [reprocessing, setReprocessing]     = useState(false);
+  const [reprocessMsg, setReprocessMsg]     = useState(null);
   const rfpId     = rfp?.id;
   const rfpStatus = rfp?.status;
 
@@ -101,12 +104,53 @@ export default function TechnicalTab({ rfp }) {
     [rfpId]
   );
 
+  async function handleReprocess() {
+    if (!rfpId || reprocessing) return;
+    setReprocessing(true);
+    setReprocessMsg(null);
+    try {
+      const res = await rfpApi.reprocess(rfpId);
+      const d   = res.data;
+      setReprocessMsg(
+        `Re-analysis complete: ${d.requirements_saved} requirements ` +
+        `(tech ${d.categories?.technical ?? 0} / legal ${d.categories?.legal ?? 0} / ` +
+        `commercial ${d.categories?.commercial ?? 0}), ${d.criteria_saved} criteria saved.`
+      );
+      reqState.refetch();
+      criteriaState.refetch();
+    } catch (err) {
+      setReprocessMsg(err?.response?.data?.detail || 'Re-analysis failed.');
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
 
       {/* Key Requirements */}
       <div className="card">
-        <h2 className="card-title">Key Requirements</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 className="card-title">Key Requirements</h2>
+          <button
+            onClick={handleReprocess}
+            disabled={reprocessing}
+            title="Re-run AI extraction on this RFP"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              fontSize: 12, padding: '4px 10px', borderRadius: 6,
+              border: '0.5px solid var(--border)', background: 'var(--bg-card)',
+              color: 'var(--text-2)', cursor: reprocessing ? 'wait' : 'pointer',
+              opacity: reprocessing ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw size={12} style={{ animation: reprocessing ? 'spin 1s linear infinite' : 'none' }} />
+            {reprocessing ? 'Re-analysing…' : 'Re-analyse'}
+          </button>
+        </div>
+        {reprocessMsg && (
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>{reprocessMsg}</p>
+        )}
         <div className="accent-bar" />
 
         <div className={styles.tagRow}>

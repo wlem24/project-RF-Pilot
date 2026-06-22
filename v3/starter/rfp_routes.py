@@ -379,7 +379,9 @@ def get_rfp_stats(
     won      = counts.get("won", 0)
     lost     = counts.get("lost", 0)
     decided  = won + lost
-    win_rate = round(won / decided * 100) if decided else 0
+    # Return None (not 0) when no RFPs have a final outcome yet — the
+    # frontend renders None as "N/A" rather than a misleading "0%".
+    win_rate = round(won / decided * 100) if decided else None
 
     active   = counts.get("under_review", 0) + counts.get("bid_decision", 0)
     prev_active = prev_counts.get("under_review", 0) + prev_counts.get("bid_decision", 0)
@@ -864,6 +866,61 @@ def get_rfp_deadlines(
         }
         for d in rows
     ]
+
+
+# ─────────────────────────────────────────────
+#  RFP Completion (7-dimension tracker)
+# ─────────────────────────────────────────────
+
+@router.get("/{rfp_id}/completion")
+def get_rfp_completion(
+    rfp_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Returns a weighted completion score (0-100) across 7 real DB signals.
+    Each dimension is either 0% (not done) or 100% (done); overall is the
+    weighted average so the dashboard can show meaningful progress.
+    """
+    rfp = db.get(models.RFP, rfp_id)
+    if not rfp:
+        raise HTTPException(status_code=404, detail="RFP not found.")
+
+    ai_summary     = db.query(models.AISummary).filter_by(rfp_id=rfp_id).first()
+    req_count      = db.query(models.Requirement).filter_by(rfp_id=rfp_id).count()
+    crit_count     = db.query(models.EvaluationCriteria).filter_by(rfp_id=rfp_id).count()
+    bid            = db.query(models.BidDecision).filter_by(rfp_id=rfp_id).first()
+    workflow_count = db.query(models.ApprovalStep).filter_by(rfp_id=rfp_id).count()
+    comment_count  = db.query(models.Comment).filter_by(rfp_id=rfp_id).count()
+    draft_count    = db.query(models.DraftDocument).filter_by(rfp_id=rfp_id).count()
+
+    has_overview    = bool(ai_summary and ai_summary.objectives)
+    has_reqs        = req_count > 0
+    has_criteria    = crit_count > 0
+    has_ai_scores   = bool(bid and bid.technical_fit is not None)
+    has_decision    = bool(bid and bid.recommendation)
+    has_workflow    = workflow_count > 0
+    has_collab      = comment_count > 0
+
+    sections = [
+        {"key": "overview_parsed",       "label": "Overview Extracted",      "weight": 15, "completed": has_overview,  "detail": f"{len(ai_summary.objectives or {})} fields extracted" if has_overview else "Not yet extracted"},
+        {"key": "requirements_extracted","label": "Requirements Extracted",  "weight": 20, "completed": has_reqs,      "detail": f"{req_count} requirement{'s' if req_count != 1 else ''}" if has_reqs else "No requirements found"},
+        {"key": "evaluation_criteria",   "label": "Evaluation Criteria",     "weight": 15, "completed": has_criteria,  "detail": f"{crit_count} {'criterion' if crit_count == 1 else 'criteria'}" if has_criteria else "No criteria detected"},
+        {"key": "ai_scored",             "label": "AI Bid Analysis",         "weight": 20, "completed": has_ai_scores, "detail": "6 scores computed" if has_ai_scores else "Scores not yet generated"},
+        {"key": "decision_made",         "label": "Bid / No-Bid Decision",   "weight": 15, "completed": has_decision,  "detail": (bid.recommendation or "").replace("_", " ").title() if has_decision else "No decision recorded"},
+        {"key": "workflow_assigned",     "label": "Approval Workflow",       "weight": 10, "completed": has_workflow,  "detail": f"{workflow_count} steps" if has_workflow else "No steps assigned"},
+        {"key": "collaboration",         "label": "Team Collaboration",      "weight":  5, "completed": has_collab,    "detail": f"{comment_count} comment{'s' if comment_count != 1 else ''}" if has_collab else "No comments yet"},
+    ]
+
+    overall = sum(s["weight"] for s in sections if s["completed"])
+
+    return {
+        "rfp_id"            : str(rfp_id),
+        "overall_completion": overall,
+        "sections"          : sections,
+        "draft_count"       : draft_count,
+    }
 
 
 # ─────────────────────────────────────────────

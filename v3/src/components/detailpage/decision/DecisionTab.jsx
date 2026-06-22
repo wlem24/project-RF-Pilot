@@ -226,8 +226,8 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval, 
   const [risks,       setRisks]       = useState('');
   const [budget,      setBudget]      = useState('');
 
-  // Drafting progress
-  const [draftData, setDraftData] = useState({ drafts: [], completion_percentage: 0 });
+  // Completion tracker (7-dimension live data)
+  const [completionData, setCompletionData] = useState(null);
 
   // Initialise from backend data
   useEffect(() => {
@@ -240,13 +240,13 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval, 
     setBudget   (bid.budgetEstimate    || '');
   }, [rfp?.id, bid.recommendation, bid.requiredResources, bid.expectedRisks, bid.budgetEstimate]);
 
-  // Fetch draft progress whenever rfpId changes
+  // Fetch completion data whenever rfpId or rfp changes (re-runs after actions)
   useEffect(() => {
     if (!rfpId) return;
-    rfpApi.getDrafts(rfpId)
-      .then(r => setDraftData(r.data))
+    rfpApi.getCompletion(rfpId)
+      .then(r => setCompletionData(r.data))
       .catch(() => {});
-  }, [rfpId]);
+  }, [rfpId, rfp?.status, decision]);
 
   async function handleDecision(value) {
     setDecision(value);
@@ -414,40 +414,60 @@ export default function DecisionTab({ rfp, rfpId, onDecision, onUpdateApproval, 
         </div>
       )}
 
-      {/* Drafting progress */}
+      {/* Overall Completion Tracker — 7 live DB signals */}
       <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 12, padding: 20 }}>
         <h3 style={{ fontSize: 14, fontWeight: 500, margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <BarChart3 size={14} color="#6366F1" aria-hidden="true" />
-          Drafting progress tracker
+          Overall Completion
         </h3>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 13, color: '#6B7280' }}>Overall completion</span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: '#6366F1' }}>{draftData.completion_percentage}%</span>
-        </div>
-        <div style={{ width: '100%', height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ width: `${draftData.completion_percentage}%`, height: '100%', background: '#6366F1', borderRadius: 4, transition: 'width 0.3s' }} />
-        </div>
-        {ALL_DRAFT_SECTIONS.map(section => {
-          const generated = draftData.drafts.find(d => d.draft_type === section.key);
-          return (
-            <div key={section.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '0.5px solid #F3F4F6' }}>
-              <span style={{ fontSize: 13, color: '#374151' }}>{section.label}</span>
-              {generated ? (
-                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 10px', borderRadius: 20, background: '#F0FDF4', color: '#059669', border: '0.5px solid #BBF7D0' }}>
-                  Generated · v{generated.version_number}
-                </span>
-              ) : (
-                <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 10px', borderRadius: 20, background: '#F8F9FB', color: '#9CA3AF', border: '0.5px solid #E5E7EB' }}>
-                  Not started
-                </span>
-              )}
-            </div>
-          );
-        })}
-        {draftData.drafts.length === 0 && (
-          <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 10 }}>
-            Use the Generate Draft button to create proposal sections
-          </p>
+
+        {!completionData ? (
+          <div className="skeleton" style={{ height: 48, borderRadius: 8 }} />
+        ) : (
+          <>
+            {/* Progress bar — color changes at thresholds */}
+            {(() => {
+              const pct  = completionData.overall_completion;
+              const barColor = pct === 100 ? '#22C55E' : pct >= 60 ? '#6366F1' : pct >= 30 ? '#F59E0B' : '#EF4444';
+              const done = completionData.sections.filter(s => s.completed).length;
+              const total = completionData.sections.length;
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: '#6B7280' }}>
+                      {pct === 100 ? 'All sections complete — ready to submit' : `${done} of ${total} sections complete`}
+                    </span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{pct}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: 8, background: '#F3F4F6', borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: barColor, borderRadius: 4, transition: 'width 0.4s' }} />
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Section rows */}
+            {completionData.sections.map(s => (
+              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '0.5px solid #F3F4F6' }}>
+                {s.completed
+                  ? <Check size={14} color="#059669" aria-label="done" />
+                  : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '1.5px solid #D1D5DB' }} />
+                }
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: s.completed ? '#111827' : '#9CA3AF' }}>{s.label}</span>
+                  <span style={{ fontSize: 10, color: '#9CA3AF', marginLeft: 8 }}>{s.detail}</span>
+                </div>
+                <span style={{ fontSize: 10, color: '#9CA3AF', minWidth: 30, textAlign: 'right' }}>{s.weight}%</span>
+              </div>
+            ))}
+
+            {/* Draft documents sub-row */}
+            {completionData.draft_count > 0 && (
+              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8, paddingTop: 8, borderTop: '0.5px solid #F3F4F6' }}>
+                {completionData.draft_count} draft section{completionData.draft_count !== 1 ? 's' : ''} generated via AI Draft Workspace
+              </div>
+            )}
+          </>
         )}
       </div>
 

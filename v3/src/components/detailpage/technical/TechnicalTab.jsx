@@ -47,6 +47,8 @@ function RequirementsList({ items, loading, rfpStatus }) {
   );
 }
 
+const SEGMENT_COLORS = ['#6366F1','#1D9E75','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899'];
+
 function EvalCriteriaSection({ items, loading, rfpStatus }) {
   if (loading) return <SkeletonList />;
   if (!items || items.length === 0) {
@@ -60,20 +62,66 @@ function EvalCriteriaSection({ items, loading, rfpStatus }) {
       />
     );
   }
+
+  const withWeight  = items.filter(i => i.weight != null);
+  const totalWeight = withWeight.reduce((s, i) => s + i.weight, 0);
+  const weightsMissing = withWeight.length === 0;
+  const weightsMismatch = !weightsMissing && Math.abs(totalWeight - 100) > 1;
+
   return (
     <div>
-      {items.map(item => (
+      {/* Stacked weight distribution bar */}
+      {!weightsMissing && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 1 }}>
+            {withWeight.map((item, i) => (
+              <div
+                key={item.id}
+                title={`${item.criteria}: ${item.weight}%`}
+                style={{
+                  width: `${(item.weight / Math.max(totalWeight, 100)) * 100}%`,
+                  background: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+                  minWidth: 2,
+                }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+            {withWeight.map((item, i) => (
+              <span key={item.id} style={{ fontSize: 10, color: '#6B7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], display: 'inline-block' }} />
+                {item.criteria} ({item.weight}%)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Warning if weights don't sum to 100 */}
+      {weightsMismatch && (
+        <div style={{ fontSize: 11, color: '#D97706', background: '#FFFBEB', border: '0.5px solid #FDE68A', borderRadius: 6, padding: '5px 10px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw size={11} /> Total weight = {totalWeight}% — expected 100%. The document rubric may be incomplete.
+        </div>
+      )}
+
+      {/* Criteria rows */}
+      {items.map((item, i) => (
         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '0.5px solid var(--border)' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{item.criteria}</div>
-            {item.notes && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{item.notes}</div>}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {!weightsMissing && (
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], flexShrink: 0 }} />
+            )}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{item.criteria}</div>
+              {item.notes && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{item.notes}</div>}
+            </div>
           </div>
           {item.weight != null && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16, minWidth: 120 }}>
               <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${Math.min(item.weight, 100)}%`, height: '100%', background: 'var(--accent)', borderRadius: 3 }} />
+                <div style={{ width: `${Math.min(item.weight, 100)}%`, height: '100%', background: SEGMENT_COLORS[i % SEGMENT_COLORS.length], borderRadius: 3 }} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', minWidth: 36 }}>{item.weight}%</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: SEGMENT_COLORS[i % SEGMENT_COLORS.length], minWidth: 36 }}>{item.weight}%</span>
             </div>
           )}
         </div>

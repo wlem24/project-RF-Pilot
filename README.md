@@ -332,3 +332,134 @@ project-RF-Pilot/
 | 0009 | bid_decisions AI score columns |
 | 0010 | rfps.priority + rfp_deadlines.due_date_parsed |
 | 0011 | invitations.role + indexes |
+
+---
+
+## Latest Updates — 23 June 2026
+
+> Covers commit `6d59154` since last README update (`b224136`).
+> 12 files changed, 456 insertions, 83 deletions.
+
+---
+
+### Bug Fixes
+
+#### File Upload — Validation Before DB Row Creation (`rfp_routes.py`)
+
+**Root cause:** Validation errors (wrong file type, oversized file) were raised using HTTP 400 after the DB row had already been created in some code paths, and PDF parse failures were silently falling back to empty text rather than rejecting the upload.
+
+**Fix:**
+- All validation now runs **before** any `db.add()` / `db.commit()` call
+- Empty file check added (`len(contents) == 0` → 422)
+- Size check returns HTTP 413 with exact file size in the error message
+- PDF integrity validated with `fitz.open()` before storing; raises 422 with a clear message if password-protected, corrupt, or zero-page
+- Wrong extension now returns HTTP 422 (not 400) for consistency
+
+**New `estimated_value` parameter:** `POST /rfps/upload` now accepts an optional `estimated_value: float = 0` form field. If provided and > 0, the value is persisted to `rfp_information.estimated_value` via upsert.
+
+---
+
+#### Pipeline Value Chart — Returns Count Instead of Monetary Value (`rfp_routes.py`, `TrackingTabs.jsx`)
+
+**Root cause:** `GET /rfps/pipeline-value` was returning RFP *count* per month in the `value` field, not the actual contract value. The chart Y-axis labels showed raw integers (1, 2, 3…) rather than SAR/USD amounts.
+
+**Backend fix:** Endpoint now JOINs `rfp_information` and sums `estimated_value` per month. Response shape extended to `{ month, value, count }` where `value` is the monetary total and `count` is the RFP count for that month.
+
+**Frontend fix (`TrackingTabs.jsx`):**
+- Added `fmtValue()` formatter: `≥1M → "1.2M"`, `≥1K → "500K"`, otherwise raw number
+- Y-axis ticks and tooltip now use the formatter
+- Tooltip shows both `Value: <formatted>` and `RFPs: <count>` per data point
+- When all values are 0, chart is replaced with an empty-state message: *"No estimated values recorded yet. Add contract value when uploading RFPs."* — the flat 0K line no longer renders
+
+---
+
+#### SMTP Email — Silent Failure with No Admin Warning (`email_utils.py`, `invitation_routes.py`)
+
+**Root cause:** `send_invitation_email()` returned a bare `bool` (`True`/`False`). When SMTP was unconfigured, the admin received no UI indication that the email was not sent. The `inviteUrl` was only included in the response when `email_sent` was `False`, so there was no way to distinguish "sent" from "failed".
+
+**Backend fix (`email_utils.py`):**
+- Function now returns a structured `dict` with keys: `status` (`"sent"` | `"failed"` | `"no_smtp_configured"`), `invite_url` (always present), and `message` (human-readable note when not sent)
+- `print()` calls replaced with `logging.warning/info/error`
+
+**`POST /invitations/` response updated:**
+- Added `emailStatus` field (`"sent"` | `"failed"` | `"no_smtp_configured"`)
+- `inviteUrl` now **always** returned (not only on failure)
+- Added `warning` field — present with a human-readable message only when email was not delivered
+
+**New endpoint:** `POST /invitations/{id}/resend` (admin only)
+- Resets `expires_at` to `+7 days` from now and sets `status = "pending"`
+- Re-sends the invitation email using the stored token
+- Returns the same `{ emailStatus, inviteUrl, warning, expiresAt }` shape
+
+---
+
+### New Features
+
+#### Real-Time Notifications via Server-Sent Events (`notification_routes.py`, `useNotificationStream.js`, `Layout.jsx`, `RightSidebar.jsx`)
+
+**Problem:** The sidebar previously polled `GET /rfps/:id/notifications` every 15 seconds. For collaborative teams, this caused up to 15 s lag between an event (approval, comment, status change) and the notification appearing in other users' browsers.
+
+**Backend — new SSE endpoint (`GET /notifications/stream`):**
+- Because `EventSource` does not support custom headers, the JWT is passed as `?token=<jwt>` query param and validated server-side with `decode_access_token()`
+- An in-memory `_sse_subscribers` dict maps `user_id → list[asyncio.Queue]` (one queue per open browser tab)
+- `push_notification(user_id, payload)` async helper exports to any route that needs to push events
+- The async generator yields a `connected` ping immediately on open, then a `ping` keepalive every 25 s to prevent proxy timeouts
+- On client disconnect the queue is removed from the registry
+
+**Frontend — `useNotificationStream.js` (new hook):**
+- Opens `EventSource` on mount; parses each message and dispatches a `rfpilot:notification` `CustomEvent` on `window`
+- On SSE error, closes the connection, starts a 30 s polling fallback, and retries SSE after 30 s
+- Returns a cleanup function (closes SSE and clears polling interval)
+
+**`Layout.jsx`:** Mounts `useNotificationStream` globally once per authenticated session so all pages receive events without duplicating connections.
+
+**`RightSidebar.jsx`:** Listens for `rfpilot:notification` window event and calls `fetchAll()` immediately on push. Polling interval reduced from 15 s to 60 s (kept as fallback only).
+
+---
+
+#### Estimated Contract Value Field on Upload Page (`UploadRFPPage.jsx`)
+
+- New "Estimated Contract Value" number input added to the upload form (optional, labelled SAR/USD)
+- Value is appended to the `FormData` as `estimated_value` and sent with the upload request
+- Hint text explains the field drives the Pipeline Value chart on the dashboard
+
+---
+
+#### Client-Side File Validation on Upload (`UploadRFPPage.jsx`)
+
+A `validateFile(f)` function runs **before** the upload request is triggered:
+- Rejects non-`.pdf` extensions with a clear inline error
+- Rejects files larger than 50 MB with the actual size shown
+- Rejects zero-byte files
+
+Validation errors are shown as an inline red list below the dropzone (not a page-level error or console log). Backend 422/413 responses are also surfaced as readable inline messages rather than the generic "Upload failed" fallback.
+
+---
+
+#### Invitation Resend Button + Status-Aware UI (`InviteModal.jsx`, `TeamPage.jsx`, `services/api.js`)
+
+**`InviteModal.jsx`:** Handles all three `emailStatus` values from the API:
+- `"sent"` → closes the modal (success flow unchanged)
+- `"no_smtp_configured"` → shows an amber warning box with the `inviteUrl` in a copy-able input + Copy button
+- `"failed"` → shows a red warning box with the same URL fallback
+
+**`TeamPage.jsx`:** Added a **Resend** button for invitations with `status = "pending"` or `"expired"`. Calls `invitationApi.resend(id)` then refetches the invitation list.
+
+**`services/api.js`:** Added `invitationApi.resend(id) → POST /invitations/{id}/resend`.
+
+---
+
+### New API Endpoints (this update)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/notifications/stream` | Bearer (via `?token=`) | SSE push stream for real-time notifications |
+| POST | `/invitations/{id}/resend` | Admin | Reset expiry and re-send invitation email |
+
+### Updated API Endpoints
+
+| Method | Path | Change |
+|---|---|---|
+| POST | `/rfps/upload` | Now accepts `estimated_value` form param; validation runs before DB write; 422/413 error codes |
+| GET | `/rfps/pipeline-value` | Returns `{ month, value, count }` where `value` is monetary sum from `rfp_information.estimated_value` |
+| POST | `/invitations/` | Response now includes `emailStatus`, `warning`; `inviteUrl` always present |
